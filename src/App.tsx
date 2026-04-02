@@ -329,6 +329,14 @@ function App() {
 
                     <div className="detail-list">
                       {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
+                        if (field.startsWith("---") && field.endsWith("---")) {
+                          return (
+                            <div key={field} style={{ gridColumn: "1 / -1", marginTop: "12px", marginBottom: "4px", background: "#f8fafc", padding: "6px 12px", borderRadius: "4px", borderLeft: "4px solid #0ea5e9", fontWeight: "bold", color: "#334155" }}>
+                              {field.replace(/---/g, "").trim()}
+                            </div>
+                          );
+                        }
+                        
                         const status =
                           field.includes("ดึงข้อ") ||
                           field.includes("ดันพื้น") ||

@@ -220,8 +220,21 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
             run2Miles2: getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 2),
             swim100m2: getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 2),
           });
-          
-          ptRawMap.set(nameKey, row);
+          const pttestRowFormatted: Record<string, string> = {
+            "--- ทดสอบร่างกาย ครั้งที่ 1 ---": "",
+            "ดึงข้อ (ครั้งที่ 1)": ptMap.get(nameKey)?.pullUp || "",
+            "ดันพื้น (ครั้งที่ 1)": ptMap.get(nameKey)?.pushUp || "",
+            "ลุกนั่ง (ครั้งที่ 1)": ptMap.get(nameKey)?.sitUp || "",
+            "วิ่ง 2 ไมล์ (ครั้งที่ 1)": ptMap.get(nameKey)?.run2Miles || "",
+            "ว่ายน้ำ 100 ม. (ครั้งที่ 1)": ptMap.get(nameKey)?.swim100m || "",
+            "--- ทดสอบร่างกาย ครั้งที่ 2 ---": "",
+            "ดึงข้อ (ครั้งที่ 2)": ptMap.get(nameKey)?.pullUp2 || "",
+            "ดันพื้น (ครั้งที่ 2)": ptMap.get(nameKey)?.pushUp2 || "",
+            "ลุกนั่ง (ครั้งที่ 2)": ptMap.get(nameKey)?.sitUp2 || "",
+            "วิ่ง 2 ไมล์ (ครั้งที่ 2)": ptMap.get(nameKey)?.run2Miles2 || "",
+            "ว่ายน้ำ 100 ม. (ครั้งที่ 2)": ptMap.get(nameKey)?.swim100m2 || "",
+          };
+          ptRawMap.set(nameKey, pttestRowFormatted);
         });
 
         mergedStudents = mergedStudents.map((student) => {
