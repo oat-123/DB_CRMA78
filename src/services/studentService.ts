@@ -101,7 +101,7 @@ const getMetricByAttempt = (
   attempt: 1 | 2,
 ): string => {
   const termSet = terms.map((term) => term.toLowerCase());
-  const attempt2Markers = ["ครั้งที่ 2", "คร้้งที่ 2", "_1", ".1", " 2"];
+  const attempt2Markers = ["ครั้งที่ 2", "คร้้งที่ 2", "_1", ".1"];
 
   const matches = Object.entries(row).filter(([key, value]) => {
     if (!value || value.trim() === "") return false;
