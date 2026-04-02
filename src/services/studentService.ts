@@ -140,6 +140,12 @@ export const parseStudentCsv = (csvText: string): Promise<StudentRecord[]> =>
     });
   });
 
+const buildSheetByNameUrl = (sheetUrl: string, sheetName: string): string | null => {
+  const sheetId = extractSheetId(sheetUrl);
+  if (!sheetId) return null;
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+};
+
 export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> => {
   const response = await fetch(csvUrl);
   if (!response.ok) {
@@ -148,102 +154,141 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
 
   const csvText = await response.text();
   const students = await parseStudentCsv(csvText);
+  let mergedStudents = students;
 
   const ptUrl = import.meta.env.VITE_PTTEST_CSV_URL ?? buildPtTestUrl(csvUrl);
-  if (!ptUrl) return students;
+  if (ptUrl) {
+    try {
+      const ptResponse = await fetch(ptUrl);
+      if (ptResponse.ok) {
+        const ptCsv = await ptResponse.text();
+        const ptRows = await parseSimpleCsvRows(ptCsv);
 
-  try {
-    const ptResponse = await fetch(ptUrl);
-    if (!ptResponse.ok) return students;
-    const ptCsv = await ptResponse.text();
-    const ptRows = await parseSimpleCsvRows(ptCsv);
+        const ptMap = new Map<
+          string,
+          {
+            pullUp: string;
+            pushUp: string;
+            sitUp: string;
+            run2Miles: string;
+            swim100m: string;
+            pullUp2: string;
+            pushUp2: string;
+            sitUp2: string;
+            run2Miles2: string;
+            swim100m2: string;
+          }
+        >();
+        ptRows.forEach((row) => {
+          const nameKey = normalizeName(
+            getFirstNonEmpty(row, ["ชื่อค้นหา"]) ||
+              `${getFirstNonEmpty(row, ["ชื่อ"])}${getFirstNonEmpty(row, ["นามสกุล"])}`,
+          );
+          if (!nameKey) return;
 
-    const ptMap = new Map<
-      string,
-      {
-        pullUp: string;
-        pushUp: string;
-        sitUp: string;
-        run2Miles: string;
-        swim100m: string;
-        pullUp2: string;
-        pushUp2: string;
-        sitUp2: string;
-        run2Miles2: string;
-        swim100m2: string;
+          ptMap.set(nameKey, {
+            pullUp: getMetricByAttempt(row, ["ดึงข้อ"], 1),
+            pushUp: getMetricByAttempt(row, ["ดันพื้น"], 1),
+            sitUp: getMetricByAttempt(row, ["ลุกนั่ง"], 1),
+            run2Miles: getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 1),
+            swim100m: getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 1),
+            pullUp2: getMetricByAttempt(row, ["ดึงข้อ"], 2),
+            pushUp2: getMetricByAttempt(row, ["ดันพื้น"], 2),
+            sitUp2: getMetricByAttempt(row, ["ลุกนั่ง"], 2),
+            run2Miles2: getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 2),
+            swim100m2: getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 2),
+          });
+        });
+
+        mergedStudents = mergedStudents.map((student) => {
+          const key = normalizeName(student.searchableName || `${student.firstName}${student.lastName}`);
+          const ptScore = ptMap.get(key);
+          if (!ptScore) return student;
+          const summary = [ptScore.pullUp, ptScore.pushUp, ptScore.sitUp, ptScore.run2Miles, ptScore.swim100m]
+            .filter((value) => value !== "")
+            .join(" | ");
+          return {
+            ...student,
+            physicalTestScore: summary,
+            ptPullUp: ptScore.pullUp,
+            ptPushUp: ptScore.pushUp,
+            ptSitUp: ptScore.sitUp,
+            ptRun2Miles: ptScore.run2Miles,
+            ptSwim100m: ptScore.swim100m,
+            pt2PullUp: ptScore.pullUp2,
+            pt2PushUp: ptScore.pushUp2,
+            pt2SitUp: ptScore.sitUp2,
+            pt2Run2Miles: ptScore.run2Miles2,
+            pt2Swim100m: ptScore.swim100m2,
+            raw: {
+              ...student.raw,
+              "ดึงข้อ ครั้งที่ 1 (PTtest 69)": ptScore.pullUp,
+              "ดันพื้น ครั้งที่ 1 (PTtest 69)": ptScore.pushUp,
+              "ลุกนั่ง ครั้งที่ 1 (PTtest 69)": ptScore.sitUp,
+              "วิ่ง 2 ไมล์ ครั้งที่ 1 (PTtest 69)": ptScore.run2Miles,
+              "ว่ายน้ำ 100 ม. ครั้งที่ 1 (PTtest 69)": ptScore.swim100m,
+              "ดึงข้อ ครั้งที่ 2 (PTtest 69)": ptScore.pullUp2,
+              "ดันพื้น ครั้งที่ 2 (PTtest 69)": ptScore.pushUp2,
+              "ลุกนั่ง ครั้งที่ 2 (PTtest 69)": ptScore.sitUp2,
+              "วิ่ง 2 ไมล์ ครั้งที่ 2 (PTtest 69)": ptScore.run2Miles2,
+              "ว่ายน้ำ 100 ม. ครั้งที่ 2 (PTtest 69)": ptScore.swim100m2,
+              "คะแนนเทสร่างกาย": summary,
+            },
+          };
+        });
       }
-    >();
-    ptRows.forEach((row) => {
-      const nameKey = normalizeName(
-        getFirstNonEmpty(row, ["ชื่อค้นหา"]) ||
-          `${getFirstNonEmpty(row, ["ชื่อ"])}${getFirstNonEmpty(row, ["นามสกุล"])}`,
-      );
-      if (!nameKey) return;
-
-      const pullUp = getMetricByAttempt(row, ["ดึงข้อ"], 1);
-      const pushUp = getMetricByAttempt(row, ["ดันพื้น"], 1);
-      const sitUp = getMetricByAttempt(row, ["ลุกนั่ง"], 1);
-      const run2Miles = getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 1);
-      const swim100m = getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 1);
-      const pullUp2 = getMetricByAttempt(row, ["ดึงข้อ"], 2);
-      const pushUp2 = getMetricByAttempt(row, ["ดันพื้น"], 2);
-      const sitUp2 = getMetricByAttempt(row, ["ลุกนั่ง"], 2);
-      const run2Miles2 = getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 2);
-      const swim100m2 = getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 2);
-
-      ptMap.set(nameKey, {
-        pullUp,
-        pushUp,
-        sitUp,
-        run2Miles,
-        swim100m,
-        pullUp2,
-        pushUp2,
-        sitUp2,
-        run2Miles2,
-        swim100m2,
-      });
-    });
-
-    return students.map((student) => {
-      const key = normalizeName(student.searchableName || `${student.firstName}${student.lastName}`);
-      const ptScore = ptMap.get(key);
-      if (!ptScore) return student;
-      const summary = [ptScore.pullUp, ptScore.pushUp, ptScore.sitUp, ptScore.run2Miles, ptScore.swim100m]
-        .filter((value) => value !== "")
-        .join(" | ");
-      return {
-        ...student,
-        physicalTestScore: summary,
-        ptPullUp: ptScore.pullUp,
-        ptPushUp: ptScore.pushUp,
-        ptSitUp: ptScore.sitUp,
-        ptRun2Miles: ptScore.run2Miles,
-        ptSwim100m: ptScore.swim100m,
-        pt2PullUp: ptScore.pullUp2,
-        pt2PushUp: ptScore.pushUp2,
-        pt2SitUp: ptScore.sitUp2,
-        pt2Run2Miles: ptScore.run2Miles2,
-        pt2Swim100m: ptScore.swim100m2,
-        raw: {
-          ...student.raw,
-          "ดึงข้อ ครั้งที่ 1 (PTtest 69)": ptScore.pullUp,
-          "ดันพื้น ครั้งที่ 1 (PTtest 69)": ptScore.pushUp,
-          "ลุกนั่ง ครั้งที่ 1 (PTtest 69)": ptScore.sitUp,
-          "วิ่ง 2 ไมล์ ครั้งที่ 1 (PTtest 69)": ptScore.run2Miles,
-          "ว่ายน้ำ 100 ม. ครั้งที่ 1 (PTtest 69)": ptScore.swim100m,
-          "ดึงข้อ ครั้งที่ 2 (PTtest 69)": ptScore.pullUp2,
-          "ดันพื้น ครั้งที่ 2 (PTtest 69)": ptScore.pushUp2,
-          "ลุกนั่ง ครั้งที่ 2 (PTtest 69)": ptScore.sitUp2,
-          "วิ่ง 2 ไมล์ ครั้งที่ 2 (PTtest 69)": ptScore.run2Miles2,
-          "ว่ายน้ำ 100 ม. ครั้งที่ 2 (PTtest 69)": ptScore.swim100m2,
-          "คะแนนเทสร่างกาย": summary,
-        },
-      };
-    });
-  } catch {
-    return students;
+    } catch {
+      // ignore
+    }
   }
+
+  // Fetch extra specific sheets that contain arbitrary columns
+  const EXTRA_SHEET_NAMES = ["ExtRawdata", "ที่อยู่เมื่อพักบ้าน"];
+  for (const sheetName of EXTRA_SHEET_NAMES) {
+    try {
+      const url = buildSheetByNameUrl(csvUrl, sheetName);
+      if (url) {
+        const extraResp = await fetch(url);
+        if (extraResp.ok) {
+          const extraCsvText = await extraResp.text();
+          // Make sure it doesn't return HTML like a Google login page
+          if (extraCsvText.startsWith("<!DOCTYPE html>") || extraCsvText.startsWith("<html")) {
+            continue;
+          }
+          const rows = await parseSimpleCsvRows(extraCsvText);
+
+          const sheetMap = new Map<string, Record<string, string>>();
+          rows.forEach((row) => {
+            const nameKey = normalizeName(
+              getFirstNonEmpty(row, ["ชื่อค้นหา"]) ||
+                `${getFirstNonEmpty(row, ["ชื่อ"])}${getFirstNonEmpty(row, ["นามสกุล"])}`,
+            );
+            if (nameKey) sheetMap.set(nameKey, row);
+          });
+
+          mergedStudents = mergedStudents.map((student) => {
+            const key = normalizeName(student.searchableName || `${student.firstName}${student.lastName}`);
+            const extraData = sheetMap.get(key);
+            if (!extraData) return student;
+            // Filter out empty columns to not overwrite existing populated ones with blanks
+            const cleanedExtraData = Object.entries(extraData).reduce<Record<string, string>>((acc, [k, v]) => {
+              if (v !== "") acc[k] = v;
+              return acc;
+            }, {});
+            
+            return {
+              ...student,
+              raw: { ...student.raw, ...cleanedExtraData },
+            };
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return mergedStudents;
 };
 
 export const pushStudentUpdate = async (
