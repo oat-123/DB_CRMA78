@@ -65,7 +65,8 @@ const extractSheetId = (sheetUrl: string): string | null => {
 const buildPtTestUrl = (sheetUrl: string): string | null => {
   const sheetId = extractSheetId(sheetUrl);
   if (!sheetId) return null;
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=PTtest%2069`;
+  // Use explicit gid instead of sheet name for more reliable fetching
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=104977054`;
 };
 
 const getFirstNonEmpty = (row: Record<string, string>, keys: string[]): string => {
