@@ -16,9 +16,24 @@ const getCellValue = (row: Record<string, unknown>, key: string): string => {
 
 const normalizeName = (value: string): string => value.toLowerCase().replace(/\s+/g, "");
 
+export const trimToAnyHeader = (csvText: string, possibleHeaders: string[]): string => {
+  let earliestIndex = -1;
+
+  for (const header of possibleHeaders) {
+    const index = csvText.indexOf(header);
+    if (index !== -1 && (earliestIndex === -1 || index < earliestIndex)) {
+      earliestIndex = index;
+    }
+  }
+
+  if (earliestIndex === -1) return csvText;
+  
+  const lastNewlineIndex = csvText.lastIndexOf("\n", earliestIndex);
+  return lastNewlineIndex === -1 ? csvText : csvText.substring(lastNewlineIndex + 1);
+};
+
 export const trimToHeader = (csvText: string): string => {
-  const headerIndex = csvText.indexOf(REQUIRED_HEADER);
-  return headerIndex === -1 ? csvText : csvText.substring(headerIndex);
+  return trimToAnyHeader(csvText, [REQUIRED_HEADER]);
 };
 
 export const mapRawRowToStudent = (row: Record<string, unknown>): StudentRecord => {
@@ -110,7 +125,9 @@ const getMetricByAttempt = (
 
 const parseSimpleCsvRows = (csvText: string): Promise<Record<string, string>[]> =>
   new Promise((resolve, reject) => {
-    Papa.parse<Record<string, unknown>>(csvText, {
+    // Trim to a generic known secondary header or primary header to skip merged row titles
+    const trimmed = trimToAnyHeader(csvText, ["ชื่อค้นหา", "ลำดับที่", "ลำดับ", "เลขบัตร ปชช", "เบอร์"]);
+    Papa.parse<Record<string, unknown>>(trimmed, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
