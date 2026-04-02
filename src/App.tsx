@@ -287,7 +287,12 @@ function App() {
       )}
 
       {!loading && !error && isBackendPage && (
-        <BackendPage students={data} onUpdateStudent={updateStudent} />
+        <BackendPage 
+          students={data} 
+          sheetUrl={SHEET_CSV_URL}
+          onRefresh={fetchData}
+          onUpdateStudent={updateStudent} 
+        />
       )}
 
       {selectedStudent && (

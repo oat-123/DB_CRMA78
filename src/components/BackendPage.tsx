@@ -4,6 +4,8 @@ import { buildStudentDisplayName } from "../utils/search";
 
 interface BackendPageProps {
   students: StudentRecord[];
+  sheetUrl: string;
+  onRefresh: () => Promise<void>;
   onUpdateStudent: (key: string, patch: Partial<StudentRecord>) => Promise<void>;
 }
 
@@ -15,13 +17,45 @@ const isPositiveMetric = (value: string): boolean | null => {
   return numeric > 0;
 };
 
-export function BackendPage({ students, onUpdateStudent }: BackendPageProps) {
+const getEditUrl = (url: string) => {
+  if (url.includes("/export?") || url.includes("/export/")) {
+    const match = url.match(/\/d\/([^/]+)/);
+    const gidMatch = url.match(/gid=(\d+)/);
+    if (match) {
+      const gid = gidMatch ? `#gid=${gidMatch[1]}` : "";
+      return `https://docs.google.com/spreadsheets/d/${match[1]}/edit${gid}`;
+    }
+  }
+  return url;
+};
+
+export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: BackendPageProps) {
   const [query, setQuery] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftRaw, setDraftRaw] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("");
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
+
+  const handleRefresh = async () => {
+    if (refreshCooldown > 0) return;
+    setRefreshCooldown(10);
+    const timer = setInterval(() => {
+      setRefreshCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    try {
+      await onRefresh();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -82,6 +116,37 @@ export function BackendPage({ students, onUpdateStudent }: BackendPageProps) {
       <div className="backend-header">
         <h2>หน้า Backend</h2>
         <p>จัดการและตรวจสอบข้อมูลนักเรียนทั้งหมด</p>
+        <div className="backend-sheet-info" style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '14px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <strong>แหล่งข้อมูล: </strong> 
+              <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                เปิด Google Sheet ต้นทาง
+              </a>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => void handleRefresh()}
+              disabled={refreshCooldown > 0}
+              style={{ 
+                padding: '6px 12px', 
+                fontSize: '13px', 
+                cursor: refreshCooldown > 0 ? 'not-allowed' : 'pointer',
+                backgroundColor: refreshCooldown > 0 ? '#cbd5e1' : '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                transition: 'background-color 0.2s'
+              }}
+            >
+              {refreshCooldown > 0 ? `รอ ${refreshCooldown} วินาที...` : "รีเฟรชข้อมูล (Sync)"}
+            </button>
+          </div>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+            URL: {sheetUrl}
+          </div>
+        </div>
       </div>
 
       <div className="backend-stats">
