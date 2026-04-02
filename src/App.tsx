@@ -9,7 +9,6 @@ const DEFAULT_SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/1f9PRgmIVv8AxQyP-oaCN00xz_Il0Kgl0sKhB_BIgRu8/export?format=csv&gid=1129857548";
 const SHEET_CSV_URL = import.meta.env.VITE_SHEET_CSV_URL ?? DEFAULT_SHEET_CSV_URL;
 const SHEET_UPDATE_URL = import.meta.env.VITE_SHEET_UPDATE_URL;
-const REFRESH_INTERVAL_MS = Number(import.meta.env.VITE_REFRESH_INTERVAL_MS ?? "10000");
 const KNOWN_RAW_KEYS = new Set([
   "ลำดับที่",
   "รหัส นตท.",
@@ -64,12 +63,7 @@ function App() {
     void fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void fetchData();
-    }, REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [fetchData]);
+
 
   useEffect(() => {
     if (!selectedStudent) return;
