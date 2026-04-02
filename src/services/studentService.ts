@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { StudentRecord } from "../types/student";
+import type { StudentRecord, UrineColorDay, TemperatureDay } from "../types/student";
 
 export interface StudentUpdateRequest {
   sourceCsvUrl: string;
@@ -164,6 +164,149 @@ const buildSheetByNameUrl = (sheetUrl: string, sheetName: string): string | null
   const sheetId = extractSheetId(sheetUrl);
   if (!sheetId) return null;
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+};
+
+const buildExternalSheetUrl = (sheetId: string, gid: string): string =>
+  `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+const EXTERNAL_SOURCES: Array<{ label: string; url: string; nameKeys: string[] }> = [
+  {
+    label: "เจ็บป่วย",
+    url: buildExternalSheetUrl("1QfJncCbq3OvU4eUeonWyn2tgTrm5Qq7omIZ7Hq4hj_Q", "0"),
+    nameKeys: ["ชื่อค้นหา", "ชื่อ"],
+  },
+];
+
+const URINE_COLOR_SHEET_URL = buildExternalSheetUrl(
+  "16w4E7pnlGvmkZpYifmcSO0KDK80X7Ko6nvEuSBj31DI",
+  "599870853",
+);
+
+const TEMP_SHEET_URL = buildExternalSheetUrl(
+  "16w4E7pnlGvmkZpYifmcSO0KDK80X7Ko6nvEuSBj31DI",
+  "2034317015",
+);
+
+const DATA_START_COL = 6;
+
+const parseUrineColorCsv = async (
+  csvText: string,
+): Promise<Map<string, UrineColorDay[]>> => {
+  return new Promise((resolve) => {
+    Papa.parse<string[]>(csvText, {
+      header: false,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = results.data;
+        const result = new Map<string, UrineColorDay[]>();
+
+        let headerIdx = -1;
+        let dayRow: string[] = [];
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          if (rows[i][0]?.trim() === "ลำดับ") {
+            headerIdx = i;
+            if (i > 0) dayRow = rows[i - 1];
+            break;
+          }
+        }
+
+        if (headerIdx === -1) {
+          resolve(result);
+          return;
+        }
+
+        const rawDayHeaders: string[] = [];
+        for (let c = DATA_START_COL; c < dayRow.length; c += 2) {
+          const val = (dayRow[c] || "").trim();
+          rawDayHeaders.push(val);
+        }
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          const row = rows[i];
+          const firstName = (row[2] || "").trim();
+          const lastName = (row[3] || "").trim();
+          if (!firstName && !lastName) continue;
+
+          const nameKey = normalizeName(`${firstName}${lastName}`);
+          const days: UrineColorDay[] = [];
+
+          for (let d = 0; d < rawDayHeaders.length; d++) {
+            const mornIdx = DATA_START_COL + d * 2;
+            const eveIdx = DATA_START_COL + d * 2 + 1;
+            const morning = (row[mornIdx] || "").trim();
+            const evening = (row[eveIdx] || "").trim();
+            const dayLabel = rawDayHeaders[d] || (d + 1).toString();
+            days.push({ day: dayLabel, morning, evening });
+          }
+
+          result.set(nameKey, days);
+        }
+
+        resolve(result);
+      },
+    });
+  });
+};
+
+const parseTemperatureCsv = async (
+  csvText: string,
+): Promise<Map<string, TemperatureDay[]>> => {
+  return new Promise((resolve) => {
+    Papa.parse<string[]>(csvText, {
+      header: false,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = results.data;
+        const result = new Map<string, TemperatureDay[]>();
+
+        let headerIdx = -1;
+        let dayRow: string[] = [];
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          if (rows[i][0]?.trim() === "ลำดับ") {
+            headerIdx = i;
+            if (i > 0) dayRow = rows[i - 1];
+            break;
+          }
+        }
+
+        if (headerIdx === -1) {
+          resolve(result);
+          return;
+        }
+
+        const rawDayHeaders: string[] = [];
+        for (let c = DATA_START_COL; c < dayRow.length; c += 3) {
+          const val = (dayRow[c] || "").trim();
+          rawDayHeaders.push(val);
+        }
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          const row = rows[i];
+          const firstName = (row[2] || "").trim();
+          const lastName = (row[3] || "").trim();
+          if (!firstName && !lastName) continue;
+
+          const nameKey = normalizeName(`${firstName}${lastName}`);
+          const days: TemperatureDay[] = [];
+
+          for (let d = 0; d < rawDayHeaders.length; d++) {
+            const mornIdx = DATA_START_COL + d * 3;
+            const eveIdx = DATA_START_COL + d * 3 + 1;
+            const bedIdx = DATA_START_COL + d * 3 + 2;
+            const morning = (row[mornIdx] || "").trim();
+            const evening = (row[eveIdx] || "").trim();
+            const beforeBed = (row[bedIdx] || "").trim();
+            const dayLabel = rawDayHeaders[d] || (d + 1).toString();
+            days.push({ day: dayLabel, morning, evening, beforeBed });
+          }
+
+          result.set(nameKey, days);
+        }
+
+        resolve(result);
+      },
+    });
+  });
 };
 
 export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> => {
@@ -331,6 +474,122 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
     } catch {
       // ignore
     }
+  }
+
+  // Fetch external spreadsheets (illness records, urine color, etc.)
+  for (const source of EXTERNAL_SOURCES) {
+    try {
+      const extResp = await fetch(source.url);
+      if (!extResp.ok) continue;
+      const extCsvText = await extResp.text();
+      if (extCsvText.startsWith("<!DOCTYPE html") || extCsvText.startsWith("<html")) continue;
+
+      const extRows = await parseSimpleCsvRows(extCsvText);
+
+      // Build a map per name – a student may have multiple rows (e.g. multiple illness episodes)
+      const extMap = new Map<string, Record<string, string>[]>();
+      extRows.forEach((row) => {
+        const nameKey = normalizeName(
+          getFirstNonEmpty(row, ["ชื่อค้นหา"]) ||
+            `${getFirstNonEmpty(row, ["ชื่อ"])}${getFirstNonEmpty(row, ["นามสกุล"])}`,
+        );
+        if (!nameKey) return;
+        if (!extMap.has(nameKey)) extMap.set(nameKey, []);
+        extMap.get(nameKey)!.push(row);
+      });
+
+      mergedStudents = mergedStudents.map((student) => {
+        const key = normalizeName(student.searchableName || `${student.firstName}${student.lastName}`);
+        const rows = extMap.get(key);
+        if (!rows || rows.length === 0) return student;
+
+        // Merge all rows for this student into a flattened display object
+        // Multiple rows are merged with a numeric index suffix to avoid key collisions
+        const merged: Record<string, string> = {};
+        if (rows.length === 1) {
+          Object.entries(rows[0]).forEach(([k, v]) => {
+            if (v !== "") merged[k] = v;
+          });
+        } else {
+          rows.forEach((row, idx) => {
+            merged[`--- รายการที่ ${idx + 1} ---`] = "";
+            Object.entries(row).forEach(([k, v]) => {
+              if (v !== "") merged[`${k} [${idx + 1}]`] = v;
+            });
+          });
+        }
+
+        return {
+          ...student,
+          sheetData: {
+            ...student.sheetData,
+            [source.label]: merged,
+          },
+        };
+      });
+    } catch {
+      // ignore individual source failures
+    }
+  }
+
+  // Fetch urine color sheet with custom multi-row-header parser
+  try {
+    const urineResp = await fetch(URINE_COLOR_SHEET_URL);
+    if (urineResp.ok) {
+      const urineCsv = await urineResp.text();
+      if (!urineCsv.startsWith("<!DOCTYPE html") && !urineCsv.startsWith("<html")) {
+        const urineMap = await parseUrineColorCsv(urineCsv);
+
+        mergedStudents = mergedStudents.map((student) => {
+          const key = normalizeName(
+            student.searchableName || `${student.firstName}${student.lastName}`,
+          );
+          const urineData = urineMap.get(key);
+          if (!urineData) return student;
+
+          return {
+            ...student,
+            urineColorData: urineData,
+            sheetData: {
+              ...student.sheetData,
+              "สีปัสสาวะ (เม.ย.)": { "__custom_renderer__": "urineColor" },
+            },
+          };
+        });
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fetch temperature sheet
+  try {
+    const tempResp = await fetch(TEMP_SHEET_URL);
+    if (tempResp.ok) {
+      const tempCsv = await tempResp.text();
+      if (!tempCsv.startsWith("<!DOCTYPE html") && !tempCsv.startsWith("<html")) {
+        const tempMap = await parseTemperatureCsv(tempCsv);
+
+        mergedStudents = mergedStudents.map((student) => {
+          const key = normalizeName(
+            student.searchableName || `${student.firstName}${student.lastName}`,
+          );
+          const tempData = tempMap.get(key);
+          if (!tempData) return student;
+
+          return {
+            ...student,
+            temperatureData: tempData,
+            sheetData: {
+              ...student.sheetData,
+              "อุณหภูมิ (เม.ย.)": { "__custom_renderer__": "temperature" },
+            },
+          };
+        });
+      }
+    }
+  } catch {
+    // ignore
   }
 
   return mergedStudents;

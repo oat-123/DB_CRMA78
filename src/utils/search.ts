@@ -16,7 +16,7 @@ export const filterStudents = (
   maxResults = 50,
 ): StudentRecord[] => {
   const normalizedQuery = normalizeForSearch(query.trim());
-  if (!normalizedQuery) return [];
+  if (!normalizedQuery) return students;
 
   return students
     .filter((student) => {

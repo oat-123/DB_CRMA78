@@ -15,6 +15,25 @@ const isPositiveMetric = (value: string): boolean | null => {
   return numeric > 0;
 };
 
+const getUrineColorClass = (value: string): string => {
+  const lower = value.toLowerCase();
+  if (lower.includes("0") || lower.includes("ใส")) return "urine-0";
+  if (lower.includes("1") || lower.includes("เหลืองใส")) return "urine-1";
+  if (lower.includes("2") || lower.includes("เหลือง")) return "urine-2";
+  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
+  if (lower.includes("4") || lower.includes("น้ำตาล")) return "urine-4";
+  return "urine-none";
+};
+
+const getTempColorClass = (value: string): string => {
+  const num = parseFloat(value);
+  if (isNaN(num)) return "temp-none";
+  if (num >= 38.5) return "temp-high-fever";
+  if (num >= 37.6) return "temp-mild-fever";
+  if (num >= 35.5) return "temp-normal";
+  return "temp-low";
+};
+
 function App() {
   const [data, setData] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -167,7 +186,7 @@ function App() {
     <div className="container">
       <div className="header">
         <h1>ค้นหาข้อมูลของ นนร.(ใหม่) 78</h1>
-        <p>ระบบสืบค้นข้อมูลนนร.จากฐานข้อมูล</p>
+        <p>ระบบสืบค้นข้อมูล นนร.จากฐานข้อมูล</p>
       </div>
 
       {!isBackendPage && (
@@ -184,7 +203,7 @@ function App() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {!loading && debouncedQuery.trim() && (
+          {!loading && (
             <div className="results-count">
               พบข้อมูล {filteredStudents.length} รายการ
             </div>
@@ -269,11 +288,11 @@ function App() {
       )}
 
       {!loading && !error && isBackendPage && (
-        <BackendPage 
-          students={data} 
+        <BackendPage
+          students={data}
           sheetUrl={SHEET_CSV_URL}
           onRefresh={fetchData}
-          onUpdateStudent={updateStudent} 
+          onUpdateStudent={updateStudent}
         />
       )}
 
@@ -334,6 +353,13 @@ function App() {
                   <>
                     <div className="detail-list">
                       {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
+                        if (field === "__custom_renderer__") return null;
+
+                        if ((activeTab === "สีปัสสาวะ (เม.ย.)" || activeTab === "อุณหภูมิ (เม.ย.)") && 
+                            (selectedStudent.urineColorData || selectedStudent.temperatureData)) {
+                          return null; // Handle separately below
+                        }
+
                         if (field.startsWith("---") && field.endsWith("---")) {
                           return (
                             <div key={field} style={{ gridColumn: "1 / -1", marginTop: "12px", marginBottom: "4px", background: "#f8fafc", padding: "6px 12px", borderRadius: "4px", borderLeft: "4px solid #0ea5e9", fontWeight: "bold", color: "#334155" }}>
@@ -341,13 +367,13 @@ function App() {
                             </div>
                           );
                         }
-                        
+
                         const status =
                           field.includes("ดึงข้อ") ||
-                          field.includes("ดันพื้น") ||
-                          field.includes("ลุกนั่ง") ||
-                          (field.includes("วิ่ง") && field.includes("ไมล์")) ||
-                          (field.includes("ว่ายน้ำ") && field.includes("100"))
+                            field.includes("ดันพื้น") ||
+                            field.includes("ลุกนั่ง") ||
+                            (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                            (field.includes("ว่ายน้ำ") && field.includes("100"))
                             ? isPositiveMetric(value)
                             : null;
                         return (
@@ -364,6 +390,78 @@ function App() {
                           </div>
                         );
                       })}
+
+                      {activeTab === "สีปัสสาวะ (เม.ย.)" && selectedStudent.urineColorData && (
+                        <div className="urine-grid-container">
+                          <div className="urine-legend">
+                            <div className="legend-item"><span className="urine-dot urine-0"></span> ใส</div>
+                            <div className="legend-item"><span className="urine-dot urine-1"></span> เหลืองใส</div>
+                            <div className="legend-item"><span className="urine-dot urine-2"></span> เหลือง</div>
+                            <div className="legend-item"><span className="urine-dot urine-3"></span> เหลืองเข้ม</div>
+                            <div className="legend-item"><span className="urine-dot urine-4"></span> น้ำตาล</div>
+                          </div>
+
+                          <div className="urine-calendar-grid">
+                            {selectedStudent.urineColorData.map((data, idx) => (
+                              <div key={idx} className="urine-day-card">
+                                <div className="day-number">วันที่ {data.day}</div>
+                                <div className="day-slots">
+                                  <div className="slot">
+                                    <span className="slot-label">เช้า:</span>
+                                    <div className={`urine-indicator ${getUrineColorClass(data.morning)}`}>
+                                      {data.morning || "-"}
+                                    </div>
+                                  </div>
+                                  <div className="slot">
+                                    <span className="slot-label">เย็น:</span>
+                                    <div className={`urine-indicator ${getUrineColorClass(data.evening)}`}>
+                                      {data.evening || "-"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {activeTab === "อุณหภูมิ (เม.ย.)" && selectedStudent.temperatureData && (
+                        <div className="urine-grid-container">
+                          <div className="urine-legend">
+                            <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ (≤37.5)</div>
+                            <div className="legend-item"><span className="urine-dot temp-mild-fever"></span> ไข้ต่ำ (37.6-38.4)</div>
+                            <div className="legend-item"><span className="urine-dot temp-high-fever"></span> ไข้สูง (≥38.5)</div>
+                          </div>
+
+                          <div className="urine-calendar-grid">
+                            {selectedStudent.temperatureData.map((data, idx) => (
+                              <div key={idx} className="urine-day-card">
+                                <div className="day-number">วันที่ {data.day}</div>
+                                <div className="day-slots">
+                                  <div className="slot">
+                                    <span className="slot-label">เช้า:</span>
+                                    <div className={`urine-indicator ${getTempColorClass(data.morning)}`}>
+                                      {data.morning || "-"}
+                                    </div>
+                                  </div>
+                                  <div className="slot">
+                                    <span className="slot-label">เย็น:</span>
+                                    <div className={`urine-indicator ${getTempColorClass(data.evening)}`}>
+                                      {data.evening || "-"}
+                                    </div>
+                                  </div>
+                                  <div className="slot">
+                                    <span className="slot-label">ก่อนนอน:</span>
+                                    <div className={`urine-indicator ${getTempColorClass(data.beforeBed)}`}>
+                                      {data.beforeBed || "-"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -372,10 +470,10 @@ function App() {
                     {Object.entries(selectedStudent.raw).map(([field, value]) => {
                       const status =
                         field.includes("ดึงข้อ") ||
-                        field.includes("ดันพื้น") ||
-                        field.includes("ลุกนั่ง") ||
-                        (field.includes("วิ่ง") && field.includes("ไมล์")) ||
-                        (field.includes("ว่ายน้ำ") && field.includes("100"))
+                          field.includes("ดันพื้น") ||
+                          field.includes("ลุกนั่ง") ||
+                          (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                          (field.includes("ว่ายน้ำ") && field.includes("100"))
                           ? isPositiveMetric(value)
                           : null;
                       return (
