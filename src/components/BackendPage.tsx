@@ -37,6 +37,7 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("");
   const [refreshCooldown, setRefreshCooldown] = useState(0);
+  const [activeTab, setActiveTab] = useState<string>("ข้อมูลหลัก (Rawdata)");
 
   const handleRefresh = async () => {
     if (refreshCooldown > 0) return;
@@ -86,6 +87,11 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
     setDraftRaw({});
     setSaveState("idle");
     setSaveMessage("");
+    if (student.sheetData && Object.keys(student.sheetData).length > 0) {
+      setActiveTab(Object.keys(student.sheetData)[0]);
+    } else {
+      setActiveTab("อ้างอิงรวม");
+    }
   };
 
   const cancelEdit = () => {
@@ -220,54 +226,123 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
             <div className="student-modal-grid">
               <section className="detail-section detail-section-full">
-                <h3>ข้อมูลทั้งหมดของคนนี้</h3>
+                <h3>ข้อมูลแยกตามชีทหลัก</h3>
                 <div style={{ marginBottom: "16px", fontSize: "14px" }}>
                   <strong>แหล่งที่มา (อ้างอิง): </strong>
                   <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: "#0284c7", textDecoration: "underline" }}>
                     เปิดดูใน Google Sheet
                   </a>
                 </div>
-                <div className="detail-list">
-                  {Object.entries(selectedStudent.raw).map(([field, value]) => {
-                    const currentValue =
-                      editingKey === getStudentKey(selectedStudent)
-                        ? (draftRaw[field] ?? "")
-                        : value;
-                    const status =
-                      field.includes("ดึงข้อ") ||
-                      field.includes("ดันพื้น") ||
-                      field.includes("ลุกนั่ง") ||
-                      (field.includes("วิ่ง") && field.includes("ไมล์")) ||
-                      (field.includes("ว่ายน้ำ") && field.includes("100"))
-                        ? isPositiveMetric(currentValue)
-                        : null;
-                    return (
-                      <div className="detail-row" key={field}>
-                        <span>{field}</span>
-                        {editingKey === getStudentKey(selectedStudent) ? (
-                          <input
-                            className="backend-cell-input"
-                            value={currentValue}
-                            onChange={(event) =>
-                              setDraftRaw((prev) => ({ ...prev, [field]: event.target.value }))
-                            }
-                          />
-                        ) : (
-                          <strong className="backend-detail-value">
-                            {currentValue || "-"}
-                            {status !== null && (
-                              <span
-                                className={status ? "metric-badge pass" : "metric-badge fail"}
-                              >
-                                {status ? "ผ่าน" : "ปรับปรุง"}
-                              </span>
+
+                {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 ? (
+                  <>
+                    <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e2e8f0", marginBottom: "16px", overflowX: "auto", paddingBottom: "4px" }}>
+                      {Object.keys(selectedStudent.sheetData).map(sheetName => (
+                        <button
+                          key={sheetName}
+                          onClick={() => setActiveTab(sheetName)}
+                          style={{
+                            padding: "8px 16px",
+                            border: "none",
+                            background: activeTab === sheetName ? "#0ea5e9" : "#f1f5f9",
+                            color: activeTab === sheetName ? "white" : "#475569",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: activeTab === sheetName ? "bold" : "normal",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          {sheetName}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="detail-list">
+                      {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
+                        const currentValue =
+                          editingKey === getStudentKey(selectedStudent)
+                            ? (draftRaw[field] ?? "")
+                            : value;
+                        const status =
+                          field.includes("ดึงข้อ") ||
+                          field.includes("ดันพื้น") ||
+                          field.includes("ลุกนั่ง") ||
+                          (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                          (field.includes("ว่ายน้ำ") && field.includes("100"))
+                            ? isPositiveMetric(currentValue)
+                            : null;
+                        return (
+                          <div className="detail-row" key={field}>
+                            <span>{field}</span>
+                            {editingKey === getStudentKey(selectedStudent) ? (
+                              <input
+                                className="backend-cell-input"
+                                value={currentValue}
+                                onChange={(event) =>
+                                  setDraftRaw((prev) => ({ ...prev, [field]: event.target.value }))
+                                }
+                              />
+                            ) : (
+                              <strong className="backend-detail-value">
+                                {currentValue || "-"}
+                                {status !== null && (
+                                  <span
+                                    className={status ? "metric-badge pass" : "metric-badge fail"}
+                                  >
+                                    {status ? "ผ่าน" : "ปรับปรุง"}
+                                  </span>
+                                )}
+                              </strong>
                             )}
-                          </strong>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="detail-list">
+                    {/* Fallback array if no sheetData provided */}
+                    {Object.entries(selectedStudent.raw).map(([field, value]) => {
+                      const currentValue =
+                        editingKey === getStudentKey(selectedStudent)
+                          ? (draftRaw[field] ?? "")
+                          : value;
+                      const status =
+                        field.includes("ดึงข้อ") ||
+                        field.includes("ดันพื้น") ||
+                        field.includes("ลุกนั่ง") ||
+                        (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                        (field.includes("ว่ายน้ำ") && field.includes("100"))
+                          ? isPositiveMetric(currentValue)
+                          : null;
+                      return (
+                        <div className="detail-row" key={field}>
+                          <span>{field}</span>
+                          {editingKey === getStudentKey(selectedStudent) ? (
+                            <input
+                              className="backend-cell-input"
+                              value={currentValue}
+                              onChange={(event) =>
+                                setDraftRaw((prev) => ({ ...prev, [field]: event.target.value }))
+                              }
+                            />
+                          ) : (
+                            <strong className="backend-detail-value">
+                              {currentValue || "-"}
+                              {status !== null && (
+                                <span
+                                  className={status ? "metric-badge pass" : "metric-badge fail"}
+                                >
+                                  {status ? "ผ่าน" : "ปรับปรุง"}
+                                </span>
+                              )}
+                            </strong>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             </div>
 

@@ -9,33 +9,11 @@ const DEFAULT_SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/1f9PRgmIVv8AxQyP-oaCN00xz_Il0Kgl0sKhB_BIgRu8/export?format=csv&gid=1129857548";
 const SHEET_CSV_URL = import.meta.env.VITE_SHEET_CSV_URL ?? DEFAULT_SHEET_CSV_URL;
 const SHEET_UPDATE_URL = import.meta.env.VITE_SHEET_UPDATE_URL;
-const KNOWN_RAW_KEYS = new Set([
-  "ลำดับที่",
-  "รหัส นตท.",
-  "คำนำหน้า",
-  "ชื่อ",
-  "นามสกุล",
-  "ชื่อเล่น",
-  "ชื่อค้นหา",
-  "ภูมิลำเนาเดิม",
-  "วัน/เดือน/ปีเกิด",
-  "อายุ",
-  "หมายเลขโทรศัพท์",
-  "สถานศึกษาก่อนเข้า รร.ตท.",
-  "กรุ๊บเลือด",
-  "ศาสนา",
-  "คะแนนเทสร่างกาย",
-  "ดึงข้อ ครั้งที่ 1 (PTtest 69)",
-  "ดันพื้น ครั้งที่ 1 (PTtest 69)",
-  "ลุกนั่ง ครั้งที่ 1 (PTtest 69)",
-  "วิ่ง 2 ไมล์ ครั้งที่ 1 (PTtest 69)",
-  "ว่ายน้ำ 100 ม. ครั้งที่ 1 (PTtest 69)",
-  "ดึงข้อ ครั้งที่ 2 (PTtest 69)",
-  "ดันพื้น ครั้งที่ 2 (PTtest 69)",
-  "ลุกนั่ง ครั้งที่ 2 (PTtest 69)",
-  "วิ่ง 2 ไมล์ ครั้งที่ 2 (PTtest 69)",
-  "ว่ายน้ำ 100 ม. ครั้งที่ 2 (PTtest 69)",
-]);
+const isPositiveMetric = (value: string): boolean | null => {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return null;
+  return numeric > 0;
+};
 
 function App() {
   const [data, setData] = useState<StudentRecord[]>([]);
@@ -43,7 +21,17 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("ข้อมูลหลัก (Rawdata)");
   const debouncedQuery = useDebouncedValue(searchQuery, 250);
+
+  const openDetailView = (student: StudentRecord) => {
+    setSelectedStudent(student);
+    if (student.sheetData && Object.keys(student.sheetData).length > 0) {
+      setActiveTab(Object.keys(student.sheetData)[0]);
+    } else {
+      setActiveTab("ข้อมูลหลัก (Rawdata)");
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -229,11 +217,11 @@ function App() {
               style={{ animationDelay: `${index * 0.05}s` }}
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedStudent(student)}
+              onClick={() => openDetailView(student)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  setSelectedStudent(student);
+                  openDetailView(student);
                 }
               }}
             >
@@ -313,146 +301,86 @@ function App() {
             </div>
 
             <div className="student-modal-grid">
-              <section className="detail-section">
-                <h3>ข้อมูลพื้นฐาน</h3>
-                <div className="detail-list">
-                  <div className="detail-row">
-                    <span>ชื่อ-สกุล</span>
-                    <strong>{buildStudentDisplayName(selectedStudent) || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>รหัสนักเรียน</span>
-                    <strong>{selectedStudent.studentId || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ชื่อค้นหา</span>
-                    <strong>{selectedStudent.searchableName || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ภูมิลำเนา</span>
-                    <strong>{selectedStudent.hometown || "-"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="detail-section">
-                <h3>ข้อมูลส่วนตัว</h3>
-                <div className="detail-list">
-                  <div className="detail-row">
-                    <span>วันเกิด</span>
-                    <strong>{selectedStudent.birthDate || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>อายุ</span>
-                    <strong>{selectedStudent.age || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>กรุ๊ปเลือด</span>
-                    <strong>{selectedStudent.bloodType || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ศาสนา</span>
-                    <strong>{selectedStudent.religion || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>คะแนนเทสร่างกาย</span>
-                    <strong>{selectedStudent.physicalTestScore || "-"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="detail-section">
-                <h3>ผลเทสร่างกาย ครั้งที่ 1 (PTtest 69)</h3>
-                <div className="detail-list">
-                  <div className="detail-row">
-                    <span>ดึงข้อ</span>
-                    <strong>{selectedStudent.ptPullUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ดันพื้น</span>
-                    <strong>{selectedStudent.ptPushUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ลุกนั่ง</span>
-                    <strong>{selectedStudent.ptSitUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>วิ่ง 2 ไมล์</span>
-                    <strong>{selectedStudent.ptRun2Miles || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ว่ายน้ำ 100 ม.</span>
-                    <strong>{selectedStudent.ptSwim100m || "-"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="detail-section">
-                <h3>ผลเทสร่างกาย ครั้งที่ 2 (PTtest 69)</h3>
-                <div className="detail-list">
-                  <div className="detail-row">
-                    <span>ดึงข้อ</span>
-                    <strong>{selectedStudent.pt2PullUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ดันพื้น</span>
-                    <strong>{selectedStudent.pt2PushUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ลุกนั่ง</span>
-                    <strong>{selectedStudent.pt2SitUp || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>วิ่ง 2 ไมล์</span>
-                    <strong>{selectedStudent.pt2Run2Miles || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>ว่ายน้ำ 100 ม.</span>
-                    <strong>{selectedStudent.pt2Swim100m || "-"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="detail-section">
-                <h3>การติดต่อและการศึกษา</h3>
-                <div className="detail-list">
-                  <div className="detail-row">
-                    <span>เบอร์โทรศัพท์</span>
-                    <strong>{selectedStudent.phoneNumber || "-"}</strong>
-                  </div>
-                  <div className="detail-row">
-                    <span>สถานศึกษาก่อนเข้า รร.ตท.</span>
-                    <strong>{selectedStudent.previousSchool || "-"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              {Object.entries(selectedStudent.raw).filter(([key]) => !KNOWN_RAW_KEYS.has(key)).length > 0 && (
-                <section className="detail-section detail-section-full">
-                  <h3>ข้อมูลเพิ่มเติม</h3>
-                  <div className="detail-list">
-                    {Object.entries(selectedStudent.raw)
-                      .filter(([key]) => !KNOWN_RAW_KEYS.has(key))
-                      .map(([key, value]) => (
-                        <div className="detail-row" key={key}>
-                          <span>{key}</span>
-                          <strong>{value || "-"}</strong>
-                        </div>
-                      ))}
-                  </div>
-                </section>
-              )}
-
               <section className="detail-section detail-section-full">
-                <h3>ข้อมูลดิบทั้งหมด</h3>
-                <div className="student-modal-raw">
-                  {Object.entries(selectedStudent.raw).map(([key, value]) => (
-                    <div className="student-modal-raw-row" key={key}>
-                      <span>{key}</span>
-                      <strong>{value || "-"}</strong>
+                <h3>ข้อมูลแยกตามชีทหลัก</h3>
+                
+                {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 ? (
+                  <>
+                    <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e2e8f0", marginBottom: "16px", overflowX: "auto", paddingBottom: "4px" }}>
+                      {Object.keys(selectedStudent.sheetData).map(sheetName => (
+                        <button
+                          key={sheetName}
+                          onClick={() => setActiveTab(sheetName)}
+                          style={{
+                            padding: "8px 16px",
+                            border: "none",
+                            background: activeTab === sheetName ? "#0ea5e9" : "#f1f5f9",
+                            color: activeTab === sheetName ? "white" : "#475569",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: activeTab === sheetName ? "bold" : "normal",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          {sheetName}
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="detail-list">
+                      {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
+                        const status =
+                          field.includes("ดึงข้อ") ||
+                          field.includes("ดันพื้น") ||
+                          field.includes("ลุกนั่ง") ||
+                          (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                          (field.includes("ว่ายน้ำ") && field.includes("100"))
+                            ? isPositiveMetric(value)
+                            : null;
+                        return (
+                          <div className="detail-row" key={field}>
+                            <span>{field}</span>
+                            <strong>
+                              {value || "-"}
+                              {status !== null && (
+                                <span className={status ? "metric-badge pass" : "metric-badge fail"} style={{ marginLeft: "4px" }}>
+                                  {status ? "ผ่าน" : "ไม่ผ่าน"}
+                                </span>
+                              )}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="detail-list">
+                    {/* Fallback array if no sheetData provided */}
+                    {Object.entries(selectedStudent.raw).map(([field, value]) => {
+                      const status =
+                        field.includes("ดึงข้อ") ||
+                        field.includes("ดันพื้น") ||
+                        field.includes("ลุกนั่ง") ||
+                        (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                        (field.includes("ว่ายน้ำ") && field.includes("100"))
+                          ? isPositiveMetric(value)
+                          : null;
+                      return (
+                        <div className="detail-row" key={field}>
+                          <span>{field}</span>
+                          <strong>
+                            {value || "-"}
+                            {status !== null && (
+                              <span className={status ? "metric-badge pass" : "metric-badge fail"} style={{ marginLeft: "4px" }}>
+                                {status ? "ผ่าน" : "ไม่ผ่าน"}
+                              </span>
+                            )}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             </div>
           </div>

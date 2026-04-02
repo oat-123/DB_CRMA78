@@ -25,4 +25,5 @@ export interface StudentRecord {
   pt2Run2Miles: string;
   pt2Swim100m: string;
   raw: Record<string, string>;
+  sheetData?: Record<string, Record<string, string>>;
 }

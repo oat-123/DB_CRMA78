@@ -54,6 +54,9 @@ export const mapRawRowToStudent = (row: Record<string, unknown>): StudentRecord 
     pt2Run2Miles: "",
     pt2Swim100m: "",
     raw,
+    sheetData: {
+      "ข้อมูลหลัก (Rawdata)": raw,
+    },
   };
 };
 
@@ -163,6 +166,8 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
       if (ptResponse.ok) {
         const ptCsv = await ptResponse.text();
         const ptRows = await parseSimpleCsvRows(ptCsv);
+        
+        const ptRawMap = new Map<string, Record<string, string>>();
 
         const ptMap = new Map<
           string,
@@ -198,6 +203,8 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
             run2Miles2: getMetricByAttempt(row, ["วิ่ง", "2", "ไมล์"], 2),
             swim100m2: getMetricByAttempt(row, ["ว่ายน้ำ", "100"], 2),
           });
+          
+          ptRawMap.set(nameKey, row);
         });
 
         mergedStudents = mergedStudents.map((student) => {
@@ -233,6 +240,10 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
               "วิ่ง 2 ไมล์ ครั้งที่ 2 (PTtest 69)": ptScore.run2Miles2,
               "ว่ายน้ำ 100 ม. ครั้งที่ 2 (PTtest 69)": ptScore.swim100m2,
               "คะแนนเทสร่างกาย": summary,
+            },
+            sheetData: {
+              ...student.sheetData,
+              "PTtest 69": ptRawMap.get(key) || {},
             },
           };
         });
@@ -279,6 +290,10 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
             return {
               ...student,
               raw: { ...student.raw, ...cleanedExtraData },
+              sheetData: {
+                ...student.sheetData,
+                [sheetName]: cleanedExtraData,
+              },
             };
           });
         }
