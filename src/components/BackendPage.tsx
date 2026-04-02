@@ -6,7 +6,7 @@ interface BackendPageProps {
   students: StudentRecord[];
   sheetUrl: string;
   onRefresh: () => Promise<void>;
-  onUpdateStudent: (key: string, patch: Partial<StudentRecord>) => Promise<void>;
+  onUpdateStudent: (key: string, patch: Partial<StudentRecord>, sourceUrl: string) => Promise<void>;
 }
 
 const DEFAULT_COLUMNS = ["ลำดับที่", "รหัส นตท.", "ชื่อ-สกุล", "จัดการ"];
@@ -15,6 +15,25 @@ const isPositiveMetric = (value: string): boolean | null => {
   const numeric = Number(value);
   if (Number.isNaN(numeric)) return null;
   return numeric > 0;
+};
+
+const getUrineColorClass = (value: string): string => {
+  const lower = (value || "").toLowerCase();
+  if (lower.includes("0") || lower.includes("ใส") && !lower.includes("เหลือง")) return "urine-0";
+  if (lower.includes("1") || lower.includes("เหลืองใส")) return "urine-1";
+  if (lower.includes("2") || lower.includes("เหลือง") && !lower.includes("เข้ม")) return "urine-2";
+  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
+  if (lower.includes("4") || lower.includes("น้ำตาล")) return "urine-4";
+  return "urine-none";
+};
+
+const getTempColorClass = (value: string): string => {
+  const num = parseFloat(value);
+  if (isNaN(num)) return "temp-none";
+  if (num >= 38.5) return "temp-high-fever";
+  if (num >= 37.6) return "temp-mild-fever";
+  if (num >= 35.5) return "temp-normal";
+  return "temp-low";
 };
 
 const getEditUrl = (url: string) => {
@@ -75,12 +94,6 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
   const getStudentKey = (student: StudentRecord): string =>
     `${student.sequence}-${student.studentId || student.searchableName}`;
 
-  const startEdit = (student: StudentRecord) => {
-    const key = getStudentKey(student);
-    setEditingKey(key);
-    setDraftRaw({ ...student.raw });
-  };
-
   const openDetail = (student: StudentRecord) => {
     setSelectedStudent(student);
     setEditingKey(null);
@@ -88,10 +101,18 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
     setSaveState("idle");
     setSaveMessage("");
     if (student.sheetData && Object.keys(student.sheetData).length > 0) {
-      setActiveTab(Object.keys(student.sheetData)[0]);
+      const tabs = Object.keys(student.sheetData);
+      setActiveTab(tabs.includes(activeTab) ? activeTab : tabs[0]);
     } else {
       setActiveTab("อ้างอิงรวม");
     }
+  };
+
+  const startEdit = (student: StudentRecord) => {
+    const key = getStudentKey(student);
+    setEditingKey(key);
+    // Make ALL data from the currently active tab editable
+    setDraftRaw({ ...student.sheetData?.[activeTab] });
   };
 
   const cancelEdit = () => {
@@ -102,15 +123,24 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
   };
 
   const saveEdit = async () => {
-    if (!editingKey) return;
+    if (!editingKey || !selectedStudent) return;
     try {
       setSaveState("saving");
-      setSaveMessage("กำลังบันทึกข้อมูล...");
-      await onUpdateStudent(editingKey, { raw: draftRaw });
+      setSaveMessage("กำลังบันทึกข้อมูลไปยัง Google Sheet...");
+      
+      // Get the correct source URL for the active tab from metadata
+      const sourceUrl = (selectedStudent.sheetData?.[activeTab] as any)?.__source_url__ || sheetUrl;
+      
+      await onUpdateStudent(editingKey, { raw: draftRaw }, sourceUrl);
+      
       setSaveState("success");
-      setSaveMessage("บันทึกสำเร็จและซิงก์ข้อมูลล่าสุดแล้ว");
-      setSelectedStudent(null);
-      cancelEdit();
+      setSaveMessage("บันทึกข้อมูลลงชีทสำเร็จแล้ว!");
+      
+      // Refresh local state without closing the modal
+      setTimeout(() => {
+        setSaveState("idle");
+        setEditingKey(null);
+      }, 1500);
     } catch (error: unknown) {
       setSaveState("error");
       setSaveMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
@@ -125,9 +155,9 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
         <div className="backend-sheet-info" style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '14px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <strong>แหล่งข้อมูล: </strong> 
+              <strong>แหล่งข้อมูลหลัก: </strong> 
               <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', textDecoration: 'underline', wordBreak: 'break-all' }}>
-                เปิด Google Sheet ต้นทาง
+                เปิด Google Sheet
               </a>
             </div>
             <button 
@@ -148,9 +178,6 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
             >
               {refreshCooldown > 0 ? `รอ ${refreshCooldown} วินาที...` : "รีเฟรชข้อมูล (Sync)"}
             </button>
-          </div>
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
-            URL: {sheetUrl}
           </div>
         </div>
       </div>
@@ -190,12 +217,10 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
               <tr key={`${student.sequence}-${student.studentId}`}>
                 <td>{student.sequence || "-"}</td>
                 <td>{student.studentId || "-"}</td>
-                <td>
-                  {buildStudentDisplayName(student)}
-                </td>
+                <td>{buildStudentDisplayName(student)}</td>
                 <td>
                   <button type="button" className="backend-action edit" onClick={() => openDetail(student)}>
-                    ดูรายละเอียด
+                    ดูรายละเอียด / แก้ไข
                   </button>
                 </td>
               </tr>
@@ -213,7 +238,7 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
       {selectedStudent && (
         <div className="student-modal-overlay" onClick={() => setSelectedStudent(null)}>
-          <div className="student-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="student-modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: '900px' }}>
             <div className="student-modal-header">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                 <div>
@@ -227,18 +252,15 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
               {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 && (
                 <>
-                  <h3 style={{ fontSize: "0.95rem", color: "#334155", marginBottom: "0.5rem" }}>ข้อมูลแยกตามชีทหลัก</h3>
-                  <div style={{ marginBottom: "12px", fontSize: "13px" }}>
-                    <strong>แหล่งที่มา (อ้างอิง): </strong>
-                    <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: "#0284c7", textDecoration: "underline" }}>
-                      เปิดดูใน Google Sheet
-                    </a>
-                  </div>
+                  <h3 style={{ fontSize: "0.95rem", color: "#334155", marginBottom: "0.5rem" }}>ข้อมูลรายชีท (คลิกแท็บเพื่อเปรียบเทียบหรือแก้ไข)</h3>
                   <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
                     {Object.keys(selectedStudent.sheetData).map(sheetName => (
                       <button
                         key={sheetName}
-                        onClick={() => setActiveTab(sheetName)}
+                        onClick={() => {
+                          setActiveTab(sheetName);
+                          setEditingKey(null); // Cancel current edit if tab changes
+                        }}
                         style={{
                           padding: "8px 16px",
                           border: "none",
@@ -260,119 +282,143 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
             <div className="student-modal-grid">
               <section className="detail-section detail-section-full" style={{ border: "none", background: "transparent", padding: "0" }}>
-                {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 ? (
-                  <>
-                    <div className="detail-list">
-                      {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
-                        if (field.startsWith("---") && field.endsWith("---")) {
-                          return (
-                            <div key={field} style={{ gridColumn: "1 / -1", marginTop: "12px", marginBottom: "4px", background: "#f8fafc", padding: "6px 12px", borderRadius: "4px", borderLeft: "4px solid #0ea5e9", fontWeight: "bold", color: "#334155" }}>
-                              {field.replace(/---/g, "").trim()}
-                            </div>
-                          );
-                        }
+                <div className="detail-list" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+                  {Object.entries(selectedStudent.sheetData?.[activeTab] || {}).map(([field, value]) => {
+                    if (field === "__custom_renderer__" || field === "__source_url__") return null;
 
-                        const currentValue =
-                          editingKey === getStudentKey(selectedStudent)
-                            ? (draftRaw[field] ?? "")
-                            : value;
-                        const status =
-                          field.includes("ดึงข้อ") ||
-                          field.includes("ดันพื้น") ||
-                          field.includes("ลุกนั่ง") ||
-                          (field.includes("วิ่ง") && field.includes("ไมล์")) ||
-                          (field.includes("ว่ายน้ำ") && field.includes("100"))
-                            ? isPositiveMetric(currentValue)
-                            : null;
-                        return (
-                          <div className="detail-row" key={field}>
-                            <span>{field}</span>
-                            {editingKey === getStudentKey(selectedStudent) ? (
-                              <input
-                                className="backend-cell-input"
-                                value={currentValue}
-                                onChange={(event) =>
-                                  setDraftRaw((prev) => ({ ...prev, [field]: event.target.value }))
-                                }
-                              />
-                            ) : (
-                              <strong className="backend-detail-value">
-                                {currentValue || "-"}
-                                {status !== null && (
-                                  <span
-                                    className={status ? "metric-badge pass" : "metric-badge fail"}
-                                  >
-                                    {status ? "ผ่าน" : "ปรับปรุง"}
-                                  </span>
-                                )}
-                              </strong>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <div className="detail-list">
-                    {/* Fallback array if no sheetData provided */}
-                    {Object.entries(selectedStudent.raw).map(([field, value]) => {
-                      const currentValue =
-                        editingKey === getStudentKey(selectedStudent)
-                          ? (draftRaw[field] ?? "")
-                          : value;
-                      const status =
-                        field.includes("ดึงข้อ") ||
-                        field.includes("ดันพื้น") ||
-                        field.includes("ลุกนั่ง") ||
-                        (field.includes("วิ่ง") && field.includes("ไมล์")) ||
-                        (field.includes("ว่ายน้ำ") && field.includes("100"))
-                          ? isPositiveMetric(currentValue)
-                          : null;
+                    const isEdit = editingKey === getStudentKey(selectedStudent);
+                    const isHealthTab = (activeTab === "สีปัสสาวะ (เม.ย.)" || activeTab === "อุณหภูมิ (เม.ย.)") && 
+                                      (selectedStudent.urineColorData || selectedStudent.temperatureData);
+
+                    if (isHealthTab && !isEdit) {
+                      return null;
+                    }
+
+                    if (field.startsWith("---") && field.endsWith("---")) {
                       return (
-                        <div className="detail-row" key={field}>
-                          <span>{field}</span>
-                          {editingKey === getStudentKey(selectedStudent) ? (
-                            <input
-                              className="backend-cell-input"
-                              value={currentValue}
-                              onChange={(event) =>
-                                setDraftRaw((prev) => ({ ...prev, [field]: event.target.value }))
-                              }
-                            />
-                          ) : (
-                            <strong className="backend-detail-value">
-                              {currentValue || "-"}
-                              {status !== null && (
-                                <span
-                                  className={status ? "metric-badge pass" : "metric-badge fail"}
-                                >
-                                  {status ? "ผ่าน" : "ปรับปรุง"}
-                                </span>
-                              )}
-                            </strong>
-                          )}
+                        <div key={field} style={{ gridColumn: "1 / -1", marginTop: "12px", marginBottom: "4px", background: "#f8fafc", padding: "6px 12px", borderRadius: "4px", borderLeft: "4px solid #0ea5e9", fontWeight: "bold", color: "#334155" }}>
+                          {field.replace(/---/g, "").trim()}
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                    }
+
+                    const currentValue = isEdit ? (draftRaw[field] ?? "") : value;
+                    const status =
+                      field.includes("ดึงข้อ") ||
+                      field.includes("ดันพื้น") ||
+                      field.includes("ลุกนั่ง") ||
+                      (field.includes("วิ่ง") && field.includes("ไมล์")) ||
+                      (field.includes("ว่ายน้ำ") && field.includes("100"))
+                        ? isPositiveMetric(currentValue)
+                        : null;
+
+                    return (
+                      <div className="detail-row" key={field}>
+                        <span>{field}</span>
+                        {isEdit ? (
+                          <input
+                            className="backend-cell-input"
+                            value={currentValue}
+                            onChange={(e) => setDraftRaw(prev => ({ ...prev, [field]: e.target.value }))}
+                            style={{ 
+                              width: '100%', 
+                              padding: '4px 8px', 
+                              border: '1px solid #cbd5e1', 
+                              borderRadius: '4px',
+                              fontSize: '14px'
+                            }}
+                          />
+                        ) : (
+                          <strong className="backend-detail-value">
+                            {currentValue || "-"}
+                            {status !== null && (
+                              <span className={status ? "metric-badge pass" : "metric-badge fail"}>
+                                {status ? "ผ่าน" : "ปรับปรุง"}
+                              </span>
+                            )}
+                          </strong>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {(activeTab === "สีปัสสาวะ (เม.ย.)" && !editingKey) && selectedStudent.urineColorData && (
+                    <div className="urine-grid-container">
+                      <div className="urine-legend" style={{ marginBottom: '1rem' }}>
+                        <div className="legend-item"><span className="urine-dot urine-0"></span> ใส</div>
+                        <div className="legend-item"><span className="urine-dot urine-1"></span> เหลืองใส</div>
+                        <div className="legend-item"><span className="urine-dot urine-2"></span> เหลือง</div>
+                        <div className="legend-item"><span className="urine-dot urine-3"></span> เหลืองเข้ม</div>
+                        <div className="legend-item"><span className="urine-dot urine-4"></span> น้ำตาล</div>
+                      </div>
+                      <div className="urine-calendar-grid">
+                        {selectedStudent.urineColorData.map((data, idx) => (
+                          <div key={idx} className="urine-day-card">
+                            <div className="day-number">วันที่ {data.day}</div>
+                            <div className="day-slots">
+                              <div className="slot">
+                                <span className="slot-label">เช้า:</span>
+                                <div className={`urine-indicator ${getUrineColorClass(data.morning)}`}>{data.morning || "-"}</div>
+                              </div>
+                              <div className="slot">
+                                <span className="slot-label">เย็น:</span>
+                                <div className={`urine-indicator ${getUrineColorClass(data.evening)}`}>{data.evening || "-"}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(activeTab === "อุณหภูมิ (เม.ย.)" && !editingKey) && selectedStudent.temperatureData && (
+                    <div className="urine-grid-container">
+                      <div className="urine-legend" style={{ marginBottom: '1rem' }}>
+                        <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ</div>
+                        <div className="legend-item"><span className="urine-dot temp-mild-fever"></span> ไข้ต่ำ</div>
+                        <div className="legend-item"><span className="urine-dot temp-high-fever"></span> ไข้สูง</div>
+                      </div>
+                      <div className="urine-calendar-grid">
+                        {selectedStudent.temperatureData.map((data, idx) => (
+                          <div key={idx} className="urine-day-card">
+                            <div className="day-number">วันที่ {data.day}</div>
+                            <div className="day-slots">
+                              <div className="slot">
+                                <span className="slot-label">เช้า:</span>
+                                <div className={`urine-indicator ${getTempColorClass(data.morning)}`}>{data.morning || "-"}</div>
+                              </div>
+                              <div className="slot">
+                                <span className="slot-label">เย็น:</span>
+                                <div className={`urine-indicator ${getTempColorClass(data.evening)}`}>{data.evening || "-"}</div>
+                              </div>
+                              <div className="slot">
+                                <span className="slot-label">ก่อนนอน:</span>
+                                <div className={`urine-indicator ${getTempColorClass(data.beforeBed)}`}>{data.beforeBed || "-"}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </section>
             </div>
 
-            <div className="backend-detail-actions">
-              {saveState !== "idle" && <p className={`save-status ${saveState}`}>{saveMessage}</p>}
+            <div className="backend-detail-actions" style={{ marginTop: '2rem', padding: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem' }}>
+              {saveState !== "idle" && <p className={`save-status ${saveState}`} style={{ margin: 0, fontWeight: 'bold' }}>{saveMessage}</p>}
               {editingKey === getStudentKey(selectedStudent) ? (
-                <div className="backend-action-group">
-                  <button type="button" className="backend-action save" onClick={() => void saveEdit()}>
-                    บันทึกการแก้ไข
+                <div className="backend-action-group" style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="backend-action save" onClick={() => void saveEdit()} disabled={saveState === "saving"}>
+                    บันทึกข้อมูลลง Google Sheet
                   </button>
-                  <button type="button" className="backend-action cancel" onClick={cancelEdit}>
+                  <button type="button" className="backend-action cancel" onClick={cancelEdit} disabled={saveState === "saving"}>
                     ยกเลิก
                   </button>
                 </div>
               ) : (
                 <button type="button" className="backend-action edit" onClick={() => startEdit(selectedStudent)}>
-                  แก้ไขข้อมูลนี้
+                  แก้ไขข้อมูลในแท็บนี้
                 </button>
               )}
             </div>

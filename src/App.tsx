@@ -89,15 +89,7 @@ function App() {
     return filterStudents(data, debouncedQuery, 50);
   }, [data, debouncedQuery]);
   const isBackendPage = window.location.pathname === "/backend";
-  const updateStudent = useCallback(async (key: string, patch: Partial<StudentRecord>) => {
-    if (SHEET_UPDATE_URL) {
-      await pushStudentUpdate(SHEET_UPDATE_URL, {
-        sourceCsvUrl: SHEET_CSV_URL,
-        studentKey: key,
-        raw: patch.raw ?? {},
-      });
-    }
-
+  const updateStudent = useCallback(async (key: string, patch: Partial<StudentRecord>, sourceUrl: string) => {
     setData((prev) =>
       prev.map((student) => {
         const studentKey = `${student.sequence}-${student.studentId || student.searchableName}`;
@@ -178,6 +170,19 @@ function App() {
         };
       }),
     );
+
+    if (SHEET_UPDATE_URL) {
+      try {
+        await pushStudentUpdate(SHEET_UPDATE_URL, {
+          sourceCsvUrl: sourceUrl, // Use the provided source URL
+          studentKey: key,
+          raw: patch.raw || {},
+        });
+      } catch (err) {
+        console.error("Failed to push update to sheet:", err);
+        throw err; // Re-throw to show error in UI
+      }
+    }
 
     await fetchData();
   }, [fetchData]);
@@ -292,7 +297,7 @@ function App() {
           students={data}
           sheetUrl={SHEET_CSV_URL}
           onRefresh={fetchData}
-          onUpdateStudent={updateStudent}
+          onUpdateStudent={(key: string, patch: Partial<StudentRecord>, url: string) => updateStudent(key, patch, url)}
         />
       )}
 

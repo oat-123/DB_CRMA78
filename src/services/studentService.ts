@@ -36,7 +36,7 @@ export const trimToHeader = (csvText: string): string => {
   return trimToAnyHeader(csvText, [REQUIRED_HEADER]);
 };
 
-export const mapRawRowToStudent = (row: Record<string, unknown>): StudentRecord => {
+export const mapRawRowToStudent = (row: Record<string, unknown>, mainUrl: string = ""): StudentRecord => {
   const raw = Object.entries(row).reduce<Record<string, string>>((acc, [key, value]) => {
     acc[key] = typeof value === "string" ? value.trim() : "";
     return acc;
@@ -70,7 +70,7 @@ export const mapRawRowToStudent = (row: Record<string, unknown>): StudentRecord 
     pt2Swim100m: "",
     raw,
     sheetData: {
-      "ข้อมูลหลัก (Rawdata)": raw,
+      "ข้อมูลหลัก (Rawdata)": { ...raw, __source_url__: mainUrl },
     },
   };
 };
@@ -143,14 +143,14 @@ const parseSimpleCsvRows = (csvText: string): Promise<Record<string, string>[]> 
     });
   });
 
-export const parseStudentCsv = (csvText: string): Promise<StudentRecord[]> =>
+export const parseStudentCsv = (csvText: string, mainUrl: string = ""): Promise<StudentRecord[]> =>
   new Promise((resolve, reject) => {
     Papa.parse<Record<string, unknown>>(trimToHeader(csvText), {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         const students = results.data
-          .map((row) => mapRawRowToStudent(row))
+          .map((row) => mapRawRowToStudent(row, mainUrl))
           .filter((row) => row.sequence !== "");
         resolve(students);
       },
@@ -191,14 +191,14 @@ const DATA_START_COL = 6;
 
 const parseUrineColorCsv = async (
   csvText: string,
-): Promise<Map<string, UrineColorDay[]>> => {
+): Promise<Map<string, { data: UrineColorDay[]; raw: Record<string, string> }>> => {
   return new Promise((resolve) => {
     Papa.parse<string[]>(csvText, {
       header: false,
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data;
-        const result = new Map<string, UrineColorDay[]>();
+        const result = new Map<string, { data: UrineColorDay[]; raw: Record<string, string> }>();
 
         let headerIdx = -1;
         let dayRow: string[] = [];
@@ -239,7 +239,12 @@ const parseUrineColorCsv = async (
             days.push({ day: dayLabel, morning, evening });
           }
 
-          result.set(nameKey, days);
+          const rawHeaders = rows[headerIdx];
+          const rawRow = rawHeaders.reduce<Record<string, string>>((acc, header, idx) => {
+            if (header) acc[header] = (row[idx] || "").trim();
+            return acc;
+          }, {});
+          result.set(nameKey, { data: days, raw: rawRow });
         }
 
         resolve(result);
@@ -250,14 +255,14 @@ const parseUrineColorCsv = async (
 
 const parseTemperatureCsv = async (
   csvText: string,
-): Promise<Map<string, TemperatureDay[]>> => {
+): Promise<Map<string, { data: TemperatureDay[]; raw: Record<string, string> }>> => {
   return new Promise((resolve) => {
     Papa.parse<string[]>(csvText, {
       header: false,
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data;
-        const result = new Map<string, TemperatureDay[]>();
+        const result = new Map<string, { data: TemperatureDay[]; raw: Record<string, string> }>();
 
         let headerIdx = -1;
         let dayRow: string[] = [];
@@ -300,7 +305,12 @@ const parseTemperatureCsv = async (
             days.push({ day: dayLabel, morning, evening, beforeBed });
           }
 
-          result.set(nameKey, days);
+          const rawHeaders = rows[headerIdx];
+          const rawRow = rawHeaders.reduce<Record<string, string>>((acc, header, idx) => {
+            if (header) acc[header] = (row[idx] || "").trim();
+            return acc;
+          }, {});
+          result.set(nameKey, { data: days, raw: rawRow });
         }
 
         resolve(result);
@@ -316,7 +326,7 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
   }
 
   const csvText = await response.text();
-  const students = await parseStudentCsv(csvText);
+  const students = await parseStudentCsv(csvText, csvUrl);
   let mergedStudents = students;
 
   const ptUrl = import.meta.env.VITE_PTTEST_CSV_URL ?? buildPtTestUrl(csvUrl);
@@ -416,7 +426,7 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
             },
             sheetData: {
               ...student.sheetData,
-              "PTtest 69": ptRawMap.get(key) || {},
+              "PTtest 69": { ...(ptRawMap.get(key) || {}), __source_url__: ptUrl },
             },
           };
         });
@@ -465,7 +475,7 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
               raw: { ...student.raw, ...cleanedExtraData },
               sheetData: {
                 ...student.sheetData,
-                [sheetName]: cleanedExtraData,
+                [sheetName]: { ...cleanedExtraData, __source_url__: url },
               },
             };
           });
@@ -549,10 +559,14 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
 
           return {
             ...student,
-            urineColorData: urineData,
+            urineColorData: urineData.data,
             sheetData: {
               ...student.sheetData,
-              "สีปัสสาวะ (เม.ย.)": { "__custom_renderer__": "urineColor" },
+              "สีปัสสาวะ (เม.ย.)": { 
+                ...urineData.raw,
+                "__custom_renderer__": "urineColor",
+                "__source_url__": URINE_COLOR_SHEET_URL 
+              },
             },
           };
         });
@@ -579,10 +593,14 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
 
           return {
             ...student,
-            temperatureData: tempData,
+            temperatureData: tempData.data,
             sheetData: {
               ...student.sheetData,
-              "อุณหภูมิ (เม.ย.)": { "__custom_renderer__": "temperature" },
+              "อุณหภูมิ (เม.ย.)": { 
+                ...tempData.raw,
+                "__custom_renderer__": "temperature",
+                "__source_url__": TEMP_SHEET_URL 
+              },
             },
           };
         });
