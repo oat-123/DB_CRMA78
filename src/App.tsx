@@ -184,30 +184,30 @@ function App() {
   return (
     <div className="container">
       <div className="header">
-        <h1>ค้นหานักเรียน นตท.</h1>
-        <p>ระบบสืบค้นข้อมูลนักเรียนจากฐานข้อมูล</p>
+        <h1>ค้นหาข้อมูลของ นนร.(ใหม่) 78</h1>
+        <p>ระบบสืบค้นข้อมูลนนร.จากฐานข้อมูล</p>
       </div>
 
       {!isBackendPage && (
         <div className="search-box">
-        <div className="search-input-wrapper">
-          <svg className="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-          </svg>
-          <input
-            type="text"
-            className="search-input"
-            placeholder="พิมพ์ชื่อ, นามสกุล, ชื่อเล่น หรือรหัสนักเรียน..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        {!loading && debouncedQuery.trim() && (
-          <div className="results-count">
-            พบข้อมูล {filteredStudents.length} รายการ
+          <div className="search-input-wrapper">
+            <svg className="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input
+              type="text"
+              className="search-input"
+              placeholder="พิมพ์ชื่อ, นามสกุล, ชื่อเล่น หรือรหัสนักเรียน..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-        )}
-      </div>
+          {!loading && debouncedQuery.trim() && (
+            <div className="results-count">
+              พบข้อมูล {filteredStudents.length} รายการ
+            </div>
+          )}
+        </div>
       )}
 
       {loading && (
