@@ -111,24 +111,6 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
     }
   };
 
-  const allColumns = useMemo(() => {
-    if (students.length === 0) return DEFAULT_COLUMNS;
-    const keys = new Set<string>();
-    // Collect all keys from all students
-    students.forEach((s) => {
-      Object.keys(s.raw).forEach((k) => keys.add(k));
-    });
-    // Order columns logically
-    const firstCols = ["ลำดับที่", "รหัส นตท.", "คำนำหน้า", "ชื่อ", "นามสกุล", "ชื่อข้นหา", "ภูมิลำเนาเดิม"];
-    const otherCols = Array.from(keys).filter((k) => !firstCols.includes(k) && k !== "คำนำหน้า"); // Filter out if already in firstCols
-    const finalCols = [];
-    for (const col of firstCols) {
-      if (keys.has(col)) finalCols.push(col);
-    }
-    finalCols.push(...otherCols);
-    return finalCols;
-  }, [students]);
-
   return (
     <section className="backend-page">
       <div className="backend-header">
@@ -188,51 +170,33 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
         />
       </div>
 
-      <div className="backend-table-wrap" style={{ overflowX: "auto" }}>
-        <table className="backend-table" style={{ whiteSpace: "nowrap" }}>
+      <div className="backend-table-wrap">
+        <table className="backend-table">
           <thead>
             <tr>
-              {allColumns.map((column) => (
+              {DEFAULT_COLUMNS.map((column) => (
                 <th key={column}>{column}</th>
               ))}
-              <th style={{ position: 'sticky', right: 0, backgroundColor: '#f1f5f9', zIndex: 1 }}>จัดการ</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((student) => (
               <tr key={`${student.sequence}-${student.studentId}`}>
-                {allColumns.map((col) => {
-                  const val = student.raw[col];
-                  const status =
-                    col.includes("ดึงข้อ") ||
-                    col.includes("ดันพื้น") ||
-                    col.includes("ลุกนั่ง") ||
-                    (col.includes("วิ่ง") && col.includes("ไมล์")) ||
-                    (col.includes("ว่ายน้ำ") && col.includes("100"))
-                      ? isPositiveMetric(val)
-                      : null;
-                  
-                  return (
-                    <td key={col}>
-                      {val || "-"}
-                      {status !== null && (
-                        <span className={status ? "metric-badge pass" : "metric-badge fail"} style={{ marginLeft: 4 }}>
-                          {status ? "ผ่าน" : "ไม่ผ่าน"}
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td style={{ position: 'sticky', right: 0, backgroundColor: 'white', zIndex: 1, boxShadow: '-2px 0 5px rgba(0,0,0,0.05)' }}>
+                <td>{student.sequence || "-"}</td>
+                <td>{student.studentId || "-"}</td>
+                <td>
+                  {buildStudentDisplayName(student)}
+                </td>
+                <td>
                   <button type="button" className="backend-action edit" onClick={() => openDetail(student)}>
-                    ดู/แก้ไขรายละเอียด
+                    ดูรายละเอียด
                   </button>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={allColumns.length + 1} className="backend-empty">
+                <td colSpan={DEFAULT_COLUMNS.length} className="backend-empty">
                   ไม่พบข้อมูลที่ตรงกับคำค้นหา
                 </td>
               </tr>
@@ -257,6 +221,12 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
             <div className="student-modal-grid">
               <section className="detail-section detail-section-full">
                 <h3>ข้อมูลทั้งหมดของคนนี้</h3>
+                <div style={{ marginBottom: "16px", fontSize: "14px" }}>
+                  <strong>แหล่งที่มา (อ้างอิง): </strong>
+                  <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: "#0284c7", textDecoration: "underline" }}>
+                    เปิดดูใน Google Sheet
+                  </a>
+                </div>
                 <div className="detail-list">
                   {Object.entries(selectedStudent.raw).map(([field, value]) => {
                     const currentValue =
