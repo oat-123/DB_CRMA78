@@ -287,46 +287,51 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="student-modal-header">
-              <div>
-                <h2>{buildStudentDisplayName(selectedStudent) || "-"}</h2>
-                <p>รหัสนักเรียน: {selectedStudent.studentId || "-"}</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                <div>
+                  <h2>{buildStudentDisplayName(selectedStudent) || "-"}</h2>
+                  <p>รหัสนักเรียน: {selectedStudent.studentId || "-"}</p>
+                </div>
+                <button
+                  type="button"
+                  className="student-modal-close"
+                  onClick={() => setSelectedStudent(null)}
+                >
+                  ปิด
+                </button>
               </div>
-              <button
-                type="button"
-                className="student-modal-close"
-                onClick={() => setSelectedStudent(null)}
-              >
-                ปิด
-              </button>
+
+              {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 && (
+                <>
+                  <h3 style={{ fontSize: "0.95rem", color: "#334155", marginBottom: "0.75rem" }}>ข้อมูลแยกตามชีทหลัก</h3>
+                  <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+                    {Object.keys(selectedStudent.sheetData).map(sheetName => (
+                      <button
+                        key={sheetName}
+                        onClick={() => setActiveTab(sheetName)}
+                        style={{
+                          padding: "8px 16px",
+                          border: "none",
+                          background: activeTab === sheetName ? "#0ea5e9" : "#f1f5f9",
+                          color: activeTab === sheetName ? "white" : "#475569",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontWeight: activeTab === sheetName ? "bold" : "normal",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {sheetName}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="student-modal-grid">
-              <section className="detail-section detail-section-full">
-                <h3>ข้อมูลแยกตามชีทหลัก</h3>
-                
+              <section className="detail-section detail-section-full" style={{ border: "none", background: "transparent", padding: "0" }}>
                 {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 ? (
                   <>
-                    <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e2e8f0", marginBottom: "16px", overflowX: "auto", paddingBottom: "4px" }}>
-                      {Object.keys(selectedStudent.sheetData).map(sheetName => (
-                        <button
-                          key={sheetName}
-                          onClick={() => setActiveTab(sheetName)}
-                          style={{
-                            padding: "8px 16px",
-                            border: "none",
-                            background: activeTab === sheetName ? "#0ea5e9" : "#f1f5f9",
-                            color: activeTab === sheetName ? "white" : "#475569",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontWeight: activeTab === sheetName ? "bold" : "normal",
-                            whiteSpace: "nowrap"
-                          }}
-                        >
-                          {sheetName}
-                        </button>
-                      ))}
-                    </div>
-
                     <div className="detail-list">
                       {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
                         if (field.startsWith("---") && field.endsWith("---")) {
