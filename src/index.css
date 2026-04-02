@@ -250,6 +250,16 @@ body {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+  position: sticky;
+  top: -1rem;
+  background: #fff;
+  z-index: 10;
+  padding: 1rem;
+  margin-top: -1rem;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 14px 14px 0 0;
 }
 
 .student-modal-header h2 {
