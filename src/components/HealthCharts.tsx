@@ -211,15 +211,15 @@ export const TempTrendChart: React.FC<{ data: TemperatureDay[] }> = ({ data }) =
       <div className="chart-scroll-wrapper" style={{ marginTop: '15px' }}>
         <svg width={width} height={height} className="health-svg">
           {/* Grid lines */}
-          {[36, 37, 37.5, 38, 39].map(t => (
+          {[36, 37, 38, 39].map(t => (
             <g key={t}>
               <line 
                 x1={padding} y1={getY(t)} 
                 x2={width - padding} y2={getY(t)}
-                stroke={t === 37.5 ? '#fecaca' : '#f1f5f9'} strokeWidth={t === 37.5 ? 2 : 1}
-                strokeDasharray={t === 37.5 ? '4' : '0'}
+                stroke={t === 37 ? '#fecaca' : '#f1f5f9'} strokeWidth={t === 37 ? 2 : 1}
+                strokeDasharray={t === 37 ? '4' : '0'}
               />
-              <text x={padding - 10} y={getY(t)} fontSize="10" fill={t === 37.5 ? '#ef4444' : '#94a3b8'} textAnchor="end" alignmentBaseline="middle">{t}°</text>
+              <text x={padding - 10} y={getY(t)} fontSize="10" fill={t === 37 ? '#ef4444' : '#94a3b8'} textAnchor="end" alignmentBaseline="middle">{t}°</text>
             </g>
           ))}
 
@@ -240,7 +240,7 @@ export const TempTrendChart: React.FC<{ data: TemperatureDay[] }> = ({ data }) =
           {[...morningPoints, ...eveningPoints, ...bedPoints].map((p, i) => (
             <circle
               key={i} cx={p.x} cy={p.y} r="4"
-              fill={p.val! >= 37.6 ? '#ef4444' : (p.type === 'รอบเช้า' ? '#0ea5e9' : p.type === 'รอบเย็น' ? '#f43f5e' : '#8b5cf6')}
+              fill={p.val! >= 37.0 ? '#ef4444' : (p.type === 'รอบเช้า' ? '#0ea5e9' : p.type === 'รอบเย็น' ? '#f43f5e' : '#8b5cf6')}
               style={{ cursor: 'pointer', transition: 'r 0.2s' }}
               onMouseMove={(e) => handleMouseMove(e, p)}
               onMouseLeave={() => setTooltip(t => ({ ...t, visible: false }))}

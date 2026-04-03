@@ -40,7 +40,7 @@ const getTempColorClass = (value: string): string => {
   const num = parseFloat(value);
   if (isNaN(num)) return "temp-none";
   if (num >= 38.5) return "temp-high-fever";
-  if (num >= 37.6) return "temp-mild-fever";
+  if (num >= 37.0) return "temp-high-fever"; // 37.0+ is now red
   if (num >= 35.5) return "temp-normal";
   return "temp-low";
 };
@@ -446,9 +446,8 @@ function App() {
                         <div className="urine-grid-container">
                           <TempTrendChart data={selectedStudent.temperatureData} />
                           <div className="urine-legend">
-                            <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ (≤37.5)</div>
-                            <div className="legend-item"><span className="urine-dot temp-mild-fever"></span> ไข้ต่ำ (37.6-38.4)</div>
-                            <div className="legend-item"><span className="urine-dot temp-high-fever"></span> ไข้สูง (≥38.5)</div>
+                            <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ (&lt; 37.0)</div>
+                            <div className="legend-item"><span className="urine-dot temp-high-fever"></span> มีไข้ (≥ 37.0)</div>
                           </div>
 
                           <div className="urine-calendar-grid">
