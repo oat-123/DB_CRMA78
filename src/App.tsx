@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BackendPage } from "./components/BackendPage";
+import { UrineTrendChart, TempTrendChart } from "./components/HealthCharts";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { fetchStudents, pushStudentUpdate } from "./services/studentService";
 import type { StudentRecord } from "./types/student";
@@ -17,12 +18,22 @@ const isPositiveMetric = (value: string): boolean | null => {
 
 const getUrineColorClass = (value: string): string => {
   const lower = value.toLowerCase();
-  if (lower.includes("0") || lower.includes("ใส")) return "urine-0";
+  if (lower.includes("4") || lower.includes("น้ำตาล")) return "urine-4";
+  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
   if (lower.includes("1") || lower.includes("เหลืองใส")) return "urine-1";
   if (lower.includes("2") || lower.includes("เหลือง")) return "urine-2";
-  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
-  if (lower.includes("4") || lower.includes("น้ำตาล")) return "urine-4";
+  if (lower.includes("0") || lower.includes("ใส")) return "urine-0";
   return "urine-none";
+};
+
+const formatUrineValue = (value: string): string => {
+  const v = (value || "").trim();
+  if (v === "0") return "ใส";
+  if (v === "1") return "เหลืองใส";
+  if (v === "2") return "เหลือง";
+  if (v === "3") return "เหลืองเข้ม";
+  if (v === "4") return "น้ำตาล";
+  return v || "-";
 };
 
 const getTempColorClass = (value: string): string => {
@@ -358,7 +369,7 @@ function App() {
                   <>
                     <div className="detail-list">
                       {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
-                        if (field === "__custom_renderer__") return null;
+                        if (field === "__custom_renderer__" || field === "__source_url__") return null;
 
                         if ((activeTab === "สีปัสสาวะ (เม.ย.)" || activeTab === "อุณหภูมิ (เม.ย.)") && 
                             (selectedStudent.urineColorData || selectedStudent.temperatureData)) {
@@ -398,6 +409,7 @@ function App() {
 
                       {activeTab === "สีปัสสาวะ (เม.ย.)" && selectedStudent.urineColorData && (
                         <div className="urine-grid-container">
+                          <UrineTrendChart data={selectedStudent.urineColorData} />
                           <div className="urine-legend">
                             <div className="legend-item"><span className="urine-dot urine-0"></span> ใส</div>
                             <div className="legend-item"><span className="urine-dot urine-1"></span> เหลืองใส</div>
@@ -414,13 +426,13 @@ function App() {
                                   <div className="slot">
                                     <span className="slot-label">เช้า:</span>
                                     <div className={`urine-indicator ${getUrineColorClass(data.morning)}`}>
-                                      {data.morning || "-"}
+                                      {formatUrineValue(data.morning)}
                                     </div>
                                   </div>
                                   <div className="slot">
                                     <span className="slot-label">เย็น:</span>
                                     <div className={`urine-indicator ${getUrineColorClass(data.evening)}`}>
-                                      {data.evening || "-"}
+                                      {formatUrineValue(data.evening)}
                                     </div>
                                   </div>
                                 </div>
@@ -432,6 +444,7 @@ function App() {
 
                       {activeTab === "อุณหภูมิ (เม.ย.)" && selectedStudent.temperatureData && (
                         <div className="urine-grid-container">
+                          <TempTrendChart data={selectedStudent.temperatureData} />
                           <div className="urine-legend">
                             <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ (≤37.5)</div>
                             <div className="legend-item"><span className="urine-dot temp-mild-fever"></span> ไข้ต่ำ (37.6-38.4)</div>

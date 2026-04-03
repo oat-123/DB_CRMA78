@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { StudentRecord } from "../types/student";
 import { buildStudentDisplayName } from "../utils/search";
+import { UrineTrendChart, TempTrendChart } from "./HealthCharts";
 
 interface BackendPageProps {
   students: StudentRecord[];
@@ -19,12 +20,22 @@ const isPositiveMetric = (value: string): boolean | null => {
 
 const getUrineColorClass = (value: string): string => {
   const lower = (value || "").toLowerCase();
-  if (lower.includes("0") || lower.includes("ใส") && !lower.includes("เหลือง")) return "urine-0";
-  if (lower.includes("1") || lower.includes("เหลืองใส")) return "urine-1";
-  if (lower.includes("2") || lower.includes("เหลือง") && !lower.includes("เข้ม")) return "urine-2";
-  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
   if (lower.includes("4") || lower.includes("น้ำตาล")) return "urine-4";
+  if (lower.includes("3") || lower.includes("เหลืองเข้ม")) return "urine-3";
+  if (lower.includes("1") || lower.includes("เหลืองใส")) return "urine-1";
+  if (lower.includes("2") || lower.includes("เหลือง")) return "urine-2";
+  if (lower.includes("0") || lower.includes("ใส")) return "urine-0";
   return "urine-none";
+};
+
+const formatUrineValue = (value: string): string => {
+  const v = (value || "").trim();
+  if (v === "0") return "ใส";
+  if (v === "1") return "เหลืองใส";
+  if (v === "2") return "เหลือง";
+  if (v === "3") return "เหลืองเข้ม";
+  if (v === "4") return "น้ำตาล";
+  return v || "-";
 };
 
 const getTempColorClass = (value: string): string => {
@@ -151,34 +162,27 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
     <section className="backend-page">
       <div className="backend-header">
         <h2>หน้า Backend</h2>
-        <p>จัดการและตรวจสอบข้อมูลนักเรียนทั้งหมด</p>
-        <div className="backend-sheet-info" style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '14px', border: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <div>
-              <strong>แหล่งข้อมูลหลัก: </strong> 
-              <a href={getEditUrl(sheetUrl)} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', textDecoration: 'underline', wordBreak: 'break-all' }}>
-                เปิด Google Sheet
-              </a>
-            </div>
-            <button 
-              type="button" 
-              onClick={() => void handleRefresh()}
-              disabled={refreshCooldown > 0}
-              style={{ 
-                padding: '6px 12px', 
-                fontSize: '13px', 
-                cursor: refreshCooldown > 0 ? 'not-allowed' : 'pointer',
-                backgroundColor: refreshCooldown > 0 ? '#cbd5e1' : '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                transition: 'background-color 0.2s'
-              }}
-            >
-              {refreshCooldown > 0 ? `รอ ${refreshCooldown} วินาที...` : "รีเฟรชข้อมูล (Sync)"}
-            </button>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+          <p>จัดการและตรวจสอบข้อมูลนักเรียนทั้งหมด</p>
+          <button 
+            type="button" 
+            onClick={() => void handleRefresh()}
+            disabled={refreshCooldown > 0}
+            style={{ 
+              padding: '8px 16px', 
+              fontSize: '13px', 
+              cursor: refreshCooldown > 0 ? 'not-allowed' : 'pointer',
+              backgroundColor: refreshCooldown > 0 ? '#cbd5e1' : '#0ea5e9',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
+              boxShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
+            }}
+          >
+            {refreshCooldown > 0 ? `รอ ${refreshCooldown} วินาที...` : "รีเฟรชข้อมูล (Sync)"}
+          </button>
         </div>
       </div>
 
@@ -282,6 +286,19 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
             <div className="student-modal-grid">
               <section className="detail-section detail-section-full" style={{ border: "none", background: "transparent", padding: "0" }}>
+                <div style={{ marginBottom: '12px', padding: '10px 14px', background: '#f0f9ff', borderRadius: '10px', border: '1px solid #bae6fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#0369a1' }}>
+                    <strong>แหล่งข้อมูลของแท็บ {activeTab}:</strong>
+                  </span>
+                  <a 
+                    href={getEditUrl((selectedStudent.sheetData?.[activeTab] as any)?.__source_url__ || sheetUrl)} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '0.85rem', color: '#0284c7', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    แก้ไขใน Google Sheet
+                  </a>
+                </div>
                 <div className="detail-list" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
                   {Object.entries(selectedStudent.sheetData?.[activeTab] || {}).map(([field, value]) => {
                     if (field === "__custom_renderer__" || field === "__source_url__") return null;
@@ -344,6 +361,7 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
                   {(activeTab === "สีปัสสาวะ (เม.ย.)" && !editingKey) && selectedStudent.urineColorData && (
                     <div className="urine-grid-container">
+                      <UrineTrendChart data={selectedStudent.urineColorData} />
                       <div className="urine-legend" style={{ marginBottom: '1rem' }}>
                         <div className="legend-item"><span className="urine-dot urine-0"></span> ใส</div>
                         <div className="legend-item"><span className="urine-dot urine-1"></span> เหลืองใส</div>
@@ -358,11 +376,11 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
                             <div className="day-slots">
                               <div className="slot">
                                 <span className="slot-label">เช้า:</span>
-                                <div className={`urine-indicator ${getUrineColorClass(data.morning)}`}>{data.morning || "-"}</div>
+                                <div className={`urine-indicator ${getUrineColorClass(data.morning)}`}>{formatUrineValue(data.morning)}</div>
                               </div>
                               <div className="slot">
                                 <span className="slot-label">เย็น:</span>
-                                <div className={`urine-indicator ${getUrineColorClass(data.evening)}`}>{data.evening || "-"}</div>
+                                <div className={`urine-indicator ${getUrineColorClass(data.evening)}`}>{formatUrineValue(data.evening)}</div>
                               </div>
                             </div>
                           </div>
@@ -373,6 +391,7 @@ export function BackendPage({ students, sheetUrl, onRefresh, onUpdateStudent }: 
 
                   {(activeTab === "อุณหภูมิ (เม.ย.)" && !editingKey) && selectedStudent.temperatureData && (
                     <div className="urine-grid-container">
+                      <TempTrendChart data={selectedStudent.temperatureData} />
                       <div className="urine-legend" style={{ marginBottom: '1rem' }}>
                         <div className="legend-item"><span className="urine-dot temp-normal"></span> ปกติ</div>
                         <div className="legend-item"><span className="urine-dot temp-mild-fever"></span> ไข้ต่ำ</div>
