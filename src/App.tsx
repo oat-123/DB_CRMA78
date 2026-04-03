@@ -50,6 +50,9 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [filterType, setFilterType] = useState<"all" | "fever" | "urine">("all");
+  const [selectedUnit, setSelectedUnit] = useState<string>("all");
+  const [selectedPlatoon, setSelectedPlatoon] = useState<string>("all");
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
   const [activeTab, setActiveTab] = useState<string>("ข้อมูลหลัก (Rawdata)");
   const debouncedQuery = useDebouncedValue(searchQuery, 250);
@@ -96,9 +99,69 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedStudent]);
 
+  const stats = useMemo(() => {
+    let feverCount = 0;
+    let darkUrineCount = 0;
+    
+    data.forEach(s => {
+      // Check latest temperature record
+      if (s.temperatureData && s.temperatureData.length > 0) {
+        const d = s.temperatureData[s.temperatureData.length - 1];
+        const temps = [parseFloat(d.morning), parseFloat(d.evening), parseFloat(d.beforeBed)];
+        if (temps.some(t => !isNaN(t) && t >= 37.0)) feverCount++;
+      }
+
+      // Check latest urine color record
+      if (s.urineColorData && s.urineColorData.length > 0) {
+        const d = s.urineColorData[s.urineColorData.length - 1];
+        const vals = [d.morning, d.evening];
+        if (vals.some(v => v === "3" || v === "4" || (v || "").includes("เข้ม") || (v || "").includes("น้ำตาล"))) darkUrineCount++;
+      }
+    });
+
+    return { total: data.length, fever: feverCount, darkUrine: darkUrineCount };
+  }, [data]);
+
+  const unitOptions = useMemo(() => {
+    const set = new Set<string>();
+    data.forEach(s => { if (s.battalionCompany) set.add(s.battalionCompany); });
+    return Array.from(set).sort();
+  }, [data]);
+
+  const platoonOptions = useMemo(() => {
+    const set = new Set<string>();
+    data.forEach(s => {
+      if (selectedUnit !== "all" && s.battalionCompany !== selectedUnit) return;
+      if (s.platoonSquad) set.add(s.platoonSquad);
+    });
+    return Array.from(set).sort();
+  }, [data, selectedUnit]);
+
   const filteredStudents = useMemo(() => {
-    return filterStudents(data, debouncedQuery, 50);
-  }, [data, debouncedQuery]);
+    const list = filterStudents(data, debouncedQuery, 100);
+    
+    return list.filter(student => {
+      // Unit/Platoon filters
+      if (selectedUnit !== "all" && student.battalionCompany !== selectedUnit) return false;
+      if (selectedPlatoon !== "all" && student.platoonSquad !== selectedPlatoon) return false;
+
+      // Health filters
+      if (filterType === "all") return true;
+      if (filterType === "fever") {
+        if (!student.temperatureData || student.temperatureData.length === 0) return false;
+        const d = student.temperatureData[student.temperatureData.length - 1];
+        const temps = [parseFloat(d.morning), parseFloat(d.evening), parseFloat(d.beforeBed)];
+        return temps.some(t => !isNaN(t) && t >= 37.0);
+      }
+      if (filterType === "urine") {
+        if (!student.urineColorData || student.urineColorData.length === 0) return false;
+        const d = student.urineColorData[student.urineColorData.length - 1];
+        const vals = [d.morning, d.evening];
+        return vals.some(v => v === "3" || v === "4" || (v || "").includes("เข้ม") || (v || "").includes("น้ำตาล"));
+      }
+      return true;
+    });
+  }, [data, debouncedQuery, filterType, selectedUnit, selectedPlatoon]);
   const isBackendPage = window.location.pathname === "/backend";
   const updateStudent = useCallback(async (key: string, patch: Partial<StudentRecord>, sourceUrl: string) => {
     setData((prev) =>
@@ -205,8 +268,61 @@ function App() {
         <p>ระบบสืบค้นข้อมูล นนร.จากฐานข้อมูล</p>
       </div>
 
+      {!isBackendPage && !loading && (
+        <div className="dashboard-section" style={{ marginBottom: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+          <div className="stat-card" style={{ background: '#f0f9ff', padding: '16px', borderRadius: '14px', border: '1px solid #bae6fd', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.8rem', color: '#0369a1', fontWeight: 600 }}>นนร. ทั้งหมด</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0ea5e9' }}>{stats.total}</div>
+          </div>
+          <button 
+            onClick={() => setFilterType(filterType === 'fever' ? 'all' : 'fever')}
+            className={`stat-card ${filterType === 'fever' ? 'active' : ''}`}
+            style={{ 
+              background: filterType === 'fever' ? '#fef2f2' : '#ffffff', 
+              padding: '16px', borderRadius: '14px', 
+              border: filterType === 'fever' ? '1px solid #ef4444' : '1px solid #e2e8f0', 
+              textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', color: filterType === 'fever' ? '#991b1b' : '#64748b', fontWeight: 600 }}>มีไข้ (≥37.0)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ef4444' }}>{stats.fever}</div>
+          </button>
+          <button 
+            onClick={() => setFilterType(filterType === 'urine' ? 'all' : 'urine')}
+            className={`stat-card ${filterType === 'urine' ? 'active' : ''}`}
+            style={{ 
+              background: filterType === 'urine' ? '#fffbeb' : '#ffffff', 
+              padding: '16px', borderRadius: '14px', 
+              border: filterType === 'urine' ? '1px solid #f59e0b' : '1px solid #e2e8f0', 
+              textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', color: filterType === 'urine' ? '#92400e' : '#64748b', fontWeight: 600 }}>สีปัสสาวะเข้ม</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b' }}>{stats.darkUrine}</div>
+          </button>
+        </div>
+      )}
+
       {!isBackendPage && (
         <div className="search-box">
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <select 
+              value={selectedUnit} 
+              onChange={(e) => { setSelectedUnit(e.target.value); setSelectedPlatoon("all"); }}
+              style={{ flex: 1, minWidth: '140px', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontSize: '0.9rem' }}
+            >
+              <option value="all">ทุกสังกัด (พัน/ร้อย)</option>
+              {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+            <select 
+              value={selectedPlatoon} 
+              onChange={(e) => setSelectedPlatoon(e.target.value)}
+              style={{ flex: 1, minWidth: '140px', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#475569', fontSize: '0.9rem' }}
+            >
+              <option value="all">ทุก มว./หมู่</option>
+              {platoonOptions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
           <div className="search-input-wrapper">
             <svg className="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -220,8 +336,16 @@ function App() {
             />
           </div>
           {!loading && (
-            <div className="results-count">
-              พบข้อมูล {filteredStudents.length} รายการ
+            <div className="results-count" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>พบข้อมูล {filteredStudents.length} รายการ</span>
+              {(filterType !== 'all' || selectedUnit !== 'all' || selectedPlatoon !== 'all') && (
+                <button 
+                  onClick={() => { setFilterType('all'); setSelectedUnit('all'); setSelectedPlatoon('all'); }} 
+                  style={{ background: '#f1f5f9', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', color: '#64748b', cursor: 'pointer' }}
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -261,13 +385,43 @@ function App() {
               }}
             >
               <div className="student-header">
-                <div className="student-name">{buildStudentDisplayName(student) || "-"}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0ea5e9', letterSpacing: '0.025em' }}>ลำดับที่ {student.sequence || "-"}</div>
+                    {/* Health Status Dots */}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {student.temperatureData && student.temperatureData.length > 0 && (
+                        (() => {
+                          const d = student.temperatureData[student.temperatureData.length - 1];
+                          const hasFever = [parseFloat(d.morning), parseFloat(d.evening), parseFloat(d.beforeBed)].some(t => t >= 37.0);
+                          return hasFever ? <span title={`มีไข้ (วันที่ ${d.day})`} style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 4px #ef4444' }}></span> : null;
+                        })()
+                      )}
+                      {student.urineColorData && student.urineColorData.length > 0 && (
+                        (() => {
+                          const d = student.urineColorData[student.urineColorData.length - 1];
+                          const isDark = [d.morning, d.evening].some(v => v === "3" || v === "4" || (v || "").includes("เข้ม") || (v || "").includes("น้ำตาล"));
+                          return isDark ? <span title={`ปัสสาวะเข้ม (วันที่ ${d.day})`} style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 4px #f59e0b' }}></span> : null;
+                        })()
+                      )}
+                    </div>
+                  </div>
+                  <div className="student-name" style={{ fontSize: '1.2rem' }}>{buildStudentDisplayName(student) || "-"}</div>
+                </div>
                 <div className="student-id">
                   รหัส: {student.studentId || "-"}
                 </div>
               </div>
 
               <div className="student-body">
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                  {student.battalionCompany && (
+                    <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>{student.battalionCompany}</span>
+                  )}
+                  {student.platoonSquad && (
+                    <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '12px', background: '#f0f9ff', color: '#0ea5e9', border: '1px solid #e0f2fe' }}>{student.platoonSquad}</span>
+                  )}
+                </div>
                 <div className="info-group">
                   <span className="info-label">ภูมิลำเนา</span>
                   <span className="info-value">{student.hometown || "-"}</span>
@@ -324,8 +478,9 @@ function App() {
             <div className="student-modal-header">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                 <div>
-                  <h2>{buildStudentDisplayName(selectedStudent) || "-"}</h2>
-                  <p>รหัสนักเรียน: {selectedStudent.studentId || "-"}</p>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0ea5e9', marginBottom: '4px' }}>ลำดับที่ {selectedStudent.sequence || "-"}</div>
+                  <h2 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{buildStudentDisplayName(selectedStudent) || "-"}</h2>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem' }}>รหัสนักเรียน: {selectedStudent.studentId || "-"}</p>
                 </div>
                 <button
                   type="button"
@@ -368,7 +523,7 @@ function App() {
                 {selectedStudent.sheetData && Object.keys(selectedStudent.sheetData).length > 0 ? (
                   <>
                     <div className="detail-list">
-                      {Object.entries(selectedStudent.sheetData[activeTab] || {}).map(([field, value]) => {
+                      {Object.entries(selectedStudent.sheetData?.[activeTab] || {}).map(([field, value]) => {
                         if (field === "__custom_renderer__" || field === "__source_url__") return null;
 
                         if ((activeTab === "สีปัสสาวะ (เม.ย.)" || activeTab === "อุณหภูมิ (เม.ย.)") && 
@@ -392,11 +547,36 @@ function App() {
                             (field.includes("ว่ายน้ำ") && field.includes("100"))
                             ? isPositiveMetric(value)
                             : null;
+
+                        // PT Improvement Comparison
+                        let improvement = "";
+                        if (activeTab.includes("PTtest") && selectedStudent.sheetData) {
+                           const compareField = field.includes("ครั้งที่ 1") 
+                            ? field.replace("ครั้งที่ 1", "ครั้งที่ 2") 
+                            : field.replace("ครั้งที่ 2", "ครั้งที่ 1");
+                           
+                           const otherValue = (selectedStudent.sheetData[activeTab] || {})[compareField];
+                           if (otherValue && value && !field.includes("วิ่ง") && !field.includes("ว่ายน้ำ")) {
+                             const vCurrent = parseFloat(value);
+                             const vOther = parseFloat(otherValue);
+                             if (!isNaN(vCurrent) && !isNaN(vOther)) {
+                               const diff = field.includes("ครั้งที่ 2") ? vCurrent - vOther : vOther - vCurrent;
+                               if (diff > 0) improvement = `(↑ ${diff})`;
+                               else if (diff < 0) improvement = `(↓ ${Math.abs(diff)})`;
+                             }
+                           }
+                        }
+
                         return (
                           <div className="detail-row" key={field}>
                             <span>{field}</span>
                             <strong>
                               {value || "-"}
+                              {improvement && (
+                                <span style={{ marginLeft: '6px', color: improvement.includes('↑') ? '#22c55e' : '#ef4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                                  {improvement}
+                                </span>
+                              )}
                               {status !== null && (
                                 <span className={status ? "metric-badge pass" : "metric-badge fail"} style={{ marginLeft: "4px" }}>
                                   {status ? "ผ่าน" : "ไม่ผ่าน"}

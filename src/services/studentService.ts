@@ -57,6 +57,8 @@ export const mapRawRowToStudent = (row: Record<string, unknown>, mainUrl: string
     previousSchool: getCellValue(row, "สถานศึกษาก่อนเข้า รร.ตท."),
     bloodType: getCellValue(row, "กรุ๊บเลือด"),
     religion: getCellValue(row, "ศาสนา"),
+    battalionCompany: getCellValue(row, "สังกัด"),
+    platoonSquad: getFirstNonEmpty(row as Record<string, string>, ["มว/หมู่", "มว. หมู่"]),
     physicalTestScore: getCellValue(row, "คะแนนเทสร่างกาย"),
     ptPullUp: "",
     ptPushUp: "",
@@ -191,14 +193,14 @@ const DATA_START_COL = 6;
 
 const parseUrineColorCsv = async (
   csvText: string,
-): Promise<Map<string, { data: UrineColorDay[]; raw: Record<string, string> }>> => {
+): Promise<Map<string, { data: UrineColorDay[]; raw: Record<string, string>; battalionCompany?: string; platoonSquad?: string }>> => {
   return new Promise((resolve) => {
     Papa.parse<string[]>(csvText, {
       header: false,
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data;
-        const result = new Map<string, { data: UrineColorDay[]; raw: Record<string, string> }>();
+        const result = new Map<string, { data: UrineColorDay[]; raw: Record<string, string>; battalionCompany?: string; platoonSquad?: string }>();
 
         let headerIdx = -1;
         let dayRow: string[] = [];
@@ -227,6 +229,9 @@ const parseUrineColorCsv = async (
           const lastName = (row[3] || "").trim();
           if (!firstName && !lastName) continue;
 
+          const battalionCompany = (row[4] || "").trim();
+          const platoonSquad = (row[5] || "").trim();
+
           const nameKey = normalizeName(`${firstName}${lastName}`);
           const days: UrineColorDay[] = [];
 
@@ -244,7 +249,7 @@ const parseUrineColorCsv = async (
             if (header) acc[header] = (row[idx] || "").trim();
             return acc;
           }, {});
-          result.set(nameKey, { data: days, raw: rawRow });
+          result.set(nameKey, { data: days, raw: rawRow, battalionCompany, platoonSquad });
         }
 
         resolve(result);
@@ -255,14 +260,14 @@ const parseUrineColorCsv = async (
 
 const parseTemperatureCsv = async (
   csvText: string,
-): Promise<Map<string, { data: TemperatureDay[]; raw: Record<string, string> }>> => {
+): Promise<Map<string, { data: TemperatureDay[]; raw: Record<string, string>; battalionCompany?: string; platoonSquad?: string }>> => {
   return new Promise((resolve) => {
     Papa.parse<string[]>(csvText, {
       header: false,
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data;
-        const result = new Map<string, { data: TemperatureDay[]; raw: Record<string, string> }>();
+        const result = new Map<string, { data: TemperatureDay[]; raw: Record<string, string>; battalionCompany?: string; platoonSquad?: string }>();
 
         let headerIdx = -1;
         let dayRow: string[] = [];
@@ -291,6 +296,9 @@ const parseTemperatureCsv = async (
           const lastName = (row[3] || "").trim();
           if (!firstName && !lastName) continue;
 
+          const battalionCompany = (row[4] || "").trim();
+          const platoonSquad = (row[5] || "").trim();
+
           const nameKey = normalizeName(`${firstName}${lastName}`);
           const days: TemperatureDay[] = [];
 
@@ -310,7 +318,7 @@ const parseTemperatureCsv = async (
             if (header) acc[header] = (row[idx] || "").trim();
             return acc;
           }, {});
-          result.set(nameKey, { data: days, raw: rawRow });
+          result.set(nameKey, { data: days, raw: rawRow, battalionCompany, platoonSquad });
         }
 
         resolve(result);
@@ -594,6 +602,8 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
           return {
             ...student,
             temperatureData: tempData.data,
+            battalionCompany: student.battalionCompany || tempData.battalionCompany,
+            platoonSquad: student.platoonSquad || tempData.platoonSquad,
             sheetData: {
               ...student.sheetData,
               "อุณหภูมิ (เม.ย.)": { 
@@ -609,6 +619,25 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
   } catch {
     // ignore
   }
+
+  // Same for urine to ensure battalion/squad are prioritized from these sheets
+  try {
+    const urineResp = await fetch(URINE_COLOR_SHEET_URL);
+    if (urineResp.ok) {
+      const urineCsv = await urineResp.text();
+      const urineMap = await parseUrineColorCsv(urineCsv);
+      mergedStudents = mergedStudents.map(student => {
+        const key = normalizeName(student.firstName + student.lastName);
+        const data = urineMap.get(key);
+        if (!data) return student;
+        return {
+          ...student,
+          battalionCompany: student.battalionCompany || data.battalionCompany,
+          platoonSquad: student.platoonSquad || data.platoonSquad,
+        };
+      });
+    }
+  } catch {}
 
   return mergedStudents;
 };

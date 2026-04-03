@@ -18,6 +18,8 @@ export interface StudentRecord {
   firstName: string;
   lastName: string;
   nickname: string;
+  battalionCompany?: string;
+  platoonSquad?: string;
   searchableName: string;
   hometown: string;
   birthDate: string;
