@@ -20,6 +20,7 @@ export interface StudentRecord {
   nickname: string;
   battalionCompany?: string;
   platoonSquad?: string;
+  isIll?: boolean;
   searchableName: string;
   hometown: string;
   birthDate: string;

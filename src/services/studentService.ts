@@ -539,6 +539,7 @@ export const fetchStudents = async (csvUrl: string): Promise<StudentRecord[]> =>
 
         return {
           ...student,
+          isIll: source.label === "เจ็บป่วย" ? true : student.isIll,
           sheetData: {
             ...student.sheetData,
             [source.label]: merged,

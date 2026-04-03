@@ -50,7 +50,7 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [filterType, setFilterType] = useState<"all" | "fever" | "urine">("all");
+  const [filterType, setFilterType] = useState<"all" | "fever" | "urine" | "ill">("all");
   const [selectedUnit, setSelectedUnit] = useState<string>("all");
   const [selectedPlatoon, setSelectedPlatoon] = useState<string>("all");
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
@@ -102,8 +102,10 @@ function App() {
   const stats = useMemo(() => {
     let feverCount = 0;
     let darkUrineCount = 0;
+    let illCount = 0;
     
     data.forEach(s => {
+      if (s.isIll) illCount++;
       // Check latest temperature record
       if (s.temperatureData && s.temperatureData.length > 0) {
         const d = s.temperatureData[s.temperatureData.length - 1];
@@ -119,7 +121,7 @@ function App() {
       }
     });
 
-    return { total: data.length, fever: feverCount, darkUrine: darkUrineCount };
+    return { total: data.length, fever: feverCount, darkUrine: darkUrineCount, ill: illCount };
   }, [data]);
 
   const unitOptions = useMemo(() => {
@@ -158,6 +160,9 @@ function App() {
         const d = student.urineColorData[student.urineColorData.length - 1];
         const vals = [d.morning, d.evening];
         return vals.some(v => v === "3" || v === "4" || (v || "").includes("เข้ม") || (v || "").includes("น้ำตาล"));
+      }
+      if (filterType === "ill") {
+        return student.isIll === true;
       }
       return true;
     });
@@ -300,6 +305,20 @@ function App() {
             <div style={{ fontSize: '0.8rem', color: filterType === 'urine' ? '#92400e' : '#64748b', fontWeight: 600 }}>สีปัสสาวะเข้ม</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b' }}>{stats.darkUrine}</div>
           </button>
+          <button 
+            onClick={() => setFilterType(filterType === 'ill' ? 'all' : 'ill')}
+            className={`stat-card ${filterType === 'ill' ? 'active' : ''}`}
+            style={{ 
+              background: filterType === 'ill' ? '#fef2f2' : '#ffffff', 
+              padding: '16px', borderRadius: '14px', 
+              border: filterType === 'ill' ? '1px solid #ef4444' : '1px solid #e2e8f0', 
+              textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
+              boxShadow: filterType === 'ill' ? '0 0 10px rgba(239, 68, 68, 0.1)' : 'none'
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', color: filterType === 'ill' ? '#991b1b' : '#64748b', fontWeight: 600 }}>เจ็บป่วย/ลากิจ</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#dc2626' }}>{stats.ill}</div>
+          </button>
         </div>
       )}
 
@@ -420,6 +439,9 @@ function App() {
                   )}
                   {student.platoonSquad && (
                     <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '12px', background: '#f0f9ff', color: '#0ea5e9', border: '1px solid #e0f2fe' }}>{student.platoonSquad}</span>
+                  )}
+                  {student.isIll && (
+                    <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '12px', background: '#fef2f2', color: '#ef4444', fontWeight: 600, border: '1px solid #fee2e2' }}>🏥 เจ็บป่วย/พัก</span>
                   )}
                 </div>
                 <div className="info-group">
